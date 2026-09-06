@@ -1,0 +1,11 @@
+---
+cli_tools_packages:
+  - bat
+  - btop
+  - eza
+  - fd-find
+  - gh
+  - git-delta
+  - jq
+  - ripgrep
+  - yq

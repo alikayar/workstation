@@ -26,3 +26,5 @@
       tags: [codex]
     - role: mise
       tags: [mise, runtimes]
+    - role: cli_tools
+      tags: [cli, cli_tools]

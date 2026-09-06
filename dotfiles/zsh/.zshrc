@@ -36,6 +36,15 @@ bindkey -e
 bindkey '^[[A' up-line-or-beginning-search
 bindkey '^[[B' down-line-or-beginning-search
 
+# Shortcuts
+alias l='eza --group-directories-first'
+alias ll='eza -lah --group-directories-first --git'
+alias la='eza -a --group-directories-first'
+alias lt='eza --tree --level=2 --group-directories-first'
+alias gs='git status'
+alias gd='git diff'
+alias gl='git log --oneline --decorate --graph --all'
+
 # Navigation
 alias ..='cd ..'
 alias ...='cd ../..'
