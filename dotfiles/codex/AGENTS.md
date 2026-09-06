@@ -19,6 +19,7 @@
 - Shell: Zsh, Starship, Zsh autosuggestions, and Zsh syntax highlighting.
 - Source control: Git with Git Delta and GitHub credential helpers.
 - Editor: VS Code with the managed extensions from this workstation project.
+- Runtimes: Mise-managed Node.js, Python, Go, and Bun versions.
 - Agent: Codex CLI with the managed configuration and command rules.
 
 ## Working agreement

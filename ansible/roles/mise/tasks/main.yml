@@ -1,0 +1,84 @@
+---
+- name: Ensure the user-local binary directory exists
+  become: false
+  ansible.builtin.file:
+    path: "{{ mise_binary | dirname }}"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0755'
+
+- name: Check the installed mise version
+  become: false
+  ansible.builtin.command: "{{ mise_binary }} --version"
+  register: mise_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download the pinned mise installer
+  become: false
+  ansible.builtin.get_url:
+    url: "{{ mise_installer_url }}"
+    dest: "{{ mise_installer_path }}"
+    checksum: "sha256:{{ mise_installer_sha256 }}"
+    mode: '0700'
+  when: >-
+    mise_installed.rc != 0 or
+    (' ' ~ mise_version ~ ' ') not in (' ' ~ mise_installed.stdout ~ ' ')
+
+- name: Install mise
+  become: false
+  ansible.builtin.command: "/bin/sh {{ mise_installer_path }}"
+  environment:
+    MISE_INSTALL_PATH: "{{ mise_binary }}"
+    MISE_VERSION: "v{{ mise_version }}"
+    MISE_INSTALL_SKIP_IF_EXISTS: '1'
+  when:
+    - not ansible_check_mode
+    - >-
+      mise_installed.rc != 0 or
+      (' ' ~ mise_version ~ ' ') not in (' ' ~ mise_installed.stdout ~ ' ')
+  changed_when: true
+
+- name: Remove the mise installer
+  become: false
+  ansible.builtin.file:
+    path: "{{ mise_installer_path }}"
+    state: absent
+
+- name: Ensure the mise configuration directory exists
+  become: false
+  ansible.builtin.file:
+    path: "{{ mise_config_dir }}"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0700'
+
+- name: Install the mise tool configuration
+  become: false
+  ansible.builtin.copy:
+    src: "{{ mise_config_src }}"
+    dest: "{{ mise_config_dest }}"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0644'
+
+- name: Check whether configured mise tools are installed
+  become: false
+  ansible.builtin.command: "{{ mise_binary }} install --dry-run-code --quiet"
+  environment:
+    MISE_CONFIG_FILE: "{{ mise_config_dest }}"
+  register: mise_tools_check
+  changed_when: false
+  failed_when: mise_tools_check.rc not in [0, 1]
+
+- name: Install configured mise tools
+  become: false
+  ansible.builtin.command: "{{ mise_binary }} install --quiet --yes"
+  environment:
+    MISE_CONFIG_FILE: "{{ mise_config_dest }}"
+  when:
+    - not ansible_check_mode
+    - mise_tools_check.rc == 1
+  changed_when: true

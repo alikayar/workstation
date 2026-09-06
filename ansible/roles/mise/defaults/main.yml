@@ -1,0 +1,9 @@
+---
+mise_version: "2026.9.1"
+mise_installer_url: "https://github.com/jdx/mise/releases/download/v{{ mise_version }}/install.sh"
+mise_installer_sha256: "3731dfec59ffb0bc23df96ae19b4b51470db939c875c2fdf01cf6c25b1b1e039"
+mise_installer_path: /tmp/workstation-mise-install.sh
+mise_binary: "{{ workstation_home }}/.local/bin/mise"
+mise_config_dir: "{{ workstation_home }}/.config/mise"
+mise_config_src: "{{ playbook_dir | dirname }}/dotfiles/mise/config.toml"
+mise_config_dest: "{{ mise_config_dir }}/config.toml"

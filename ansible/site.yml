@@ -24,3 +24,5 @@
       tags: [git]
     - role: codex
       tags: [codex]
+    - role: mise
+      tags: [mise, runtimes]

@@ -36,10 +36,19 @@ bindkey -e
 bindkey '^[[A' up-line-or-beginning-search
 bindkey '^[[B' down-line-or-beginning-search
 
+# Navigation
+alias ..='cd ..'
+alias ...='cd ../..'
+
 # Autosuggestions
 if [[ -r /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
   ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
   source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
+
+# Runtime version manager
+if (( $+commands[mise] )); then
+  eval "$(mise activate zsh)"
 fi
 
 # Prompt
