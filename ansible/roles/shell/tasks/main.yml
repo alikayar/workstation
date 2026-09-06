@@ -1,0 +1,107 @@
+---
+- name: Update APT cache
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install Zsh packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ shell_packages }}"
+    state: present
+
+- name: Ensure the user-local binary directory exists
+  become: false
+  ansible.builtin.file:
+    path: "{{ workstation_home }}/.local/bin"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0755'
+
+- name: Validate the supported CPU architecture
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['architecture'] in ['x86_64', 'aarch64']
+    fail_msg: >-
+      Starship supports x86_64 and aarch64 in this role; found
+      {{ ansible_facts['architecture'] }}.
+
+- name: Select the Starship release artifact
+  ansible.builtin.set_fact:
+    shell_starship_arch: >-
+      {{ 'x86_64' if ansible_facts['architecture'] == 'x86_64' else 'aarch64' }}
+    shell_starship_target: >-
+      {{ 'x86_64-unknown-linux-gnu'
+      if ansible_facts['architecture'] == 'x86_64'
+      else 'aarch64-unknown-linux-musl' }}
+
+- name: Check the installed Starship version
+  become: false
+  ansible.builtin.command: "{{ workstation_home }}/.local/bin/starship --version"
+  register: shell_starship_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download the pinned Starship release
+  become: false
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/starship/starship/releases/download/v{{ shell_starship_version
+      }}/starship-{{ shell_starship_target }}.tar.gz
+    dest: "/tmp/starship-{{ shell_starship_version }}-{{ shell_starship_arch }}.tar.gz"
+    checksum: "sha256:{{ shell_starship_checksums[shell_starship_arch] }}"
+    mode: '0600'
+  when: >-
+    shell_starship_installed.rc != 0 or
+    shell_starship_version not in shell_starship_installed.stdout
+
+- name: Install Starship
+  become: false
+  ansible.builtin.unarchive:
+    src: "/tmp/starship-{{ shell_starship_version }}-{{ shell_starship_arch }}.tar.gz"
+    dest: "{{ workstation_home }}/.local/bin"
+    remote_src: true
+    include:
+      - starship
+  when:
+    - not ansible_check_mode
+    - >-
+      shell_starship_installed.rc != 0 or
+      shell_starship_version not in shell_starship_installed.stdout
+
+- name: Remove the Starship archive
+  become: false
+  ansible.builtin.file:
+    path: "/tmp/starship-{{ shell_starship_version }}-{{ shell_starship_arch }}.tar.gz"
+    state: absent
+
+- name: Install the Zsh configuration
+  become: false
+  ansible.builtin.copy:
+    src: "{{ shell_zshrc_src }}"
+    dest: "{{ shell_zshrc_dest }}"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0644'
+    backup: true
+
+- name: Ensure the Starship configuration directory exists
+  become: false
+  ansible.builtin.file:
+    path: "{{ workstation_home }}/.config"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0755'
+
+- name: Install the Starship configuration
+  become: false
+  ansible.builtin.copy:
+    src: "{{ shell_starship_config_src }}"
+    dest: "{{ shell_starship_config_dest }}"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0644'
+    backup: true

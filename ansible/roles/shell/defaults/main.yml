@@ -1,0 +1,15 @@
+---
+shell_packages:
+  - zsh
+  - zsh-autosuggestions
+  - zsh-syntax-highlighting
+
+shell_starship_version: "1.26.0"
+shell_starship_checksums:
+  x86_64: "321f0dd7af8340a5f2e6a8fec6538a04f617486f9ec70d878f91c09cd8deef22"
+  aarch64: "dc30189378d2f2e287384e8a692d3f95ad1df64cf0e8c36aa9201516028aed6b"
+
+shell_zshrc_src: "{{ playbook_dir | dirname }}/dotfiles/zsh/.zshrc"
+shell_zshrc_dest: "{{ workstation_home }}/.zshrc"
+shell_starship_config_src: "{{ playbook_dir | dirname }}/dotfiles/starship/starship.toml"
+shell_starship_config_dest: "{{ workstation_home }}/.config/starship.toml"
