@@ -18,8 +18,6 @@
   roles:
     - role: shell
       tags: [shell, zsh]
-    - role: vscode
-      tags: [vscode]
     - role: git
       tags: [git]
     - role: codex
