@@ -1,6 +1,7 @@
 [user]
     name = {{ git_user_name }}
     email = {{ git_user_email }}
+    useConfigOnly = true
 
 [init]
     defaultBranch = main
@@ -22,9 +23,6 @@
 
 [merge]
     conflictStyle = zdiff3
-
-[credential]
-    useConfigOnly = true
 
 [credential "https://github.com"]
     helper =
