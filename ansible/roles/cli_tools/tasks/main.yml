@@ -1,0 +1,37 @@
+---
+- name: Update APT cache
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install selected CLI tools
+  become: true
+  ansible.builtin.apt:
+    name: "{{ cli_tools_packages }}"
+    state: present
+
+- name: Ensure the user-local binary directory exists
+  become: false
+  ansible.builtin.file:
+    path: "{{ workstation_home }}/.local/bin"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0755'
+
+- name: Provide the conventional fd command name
+  become: false
+  ansible.builtin.file:
+    src: /usr/bin/fdfind
+    dest: "{{ workstation_home }}/.local/bin/fd"
+    state: link
+    force: true
+
+- name: Provide the conventional bat command name
+  become: false
+  ansible.builtin.file:
+    src: /usr/bin/batcat
+    dest: "{{ workstation_home }}/.local/bin/bat"
+    state: link
+    force: true
