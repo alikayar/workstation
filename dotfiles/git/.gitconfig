@@ -1,0 +1,32 @@
+[user]
+    name = {{ git_user_name }}
+    email = {{ git_user_email }}
+
+[init]
+    defaultBranch = main
+
+[core]
+    pager = delta
+
+[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+    navigate = true
+
+[fetch]
+    prune = true
+
+[push]
+    autoSetupRemote = true
+
+[merge]
+    conflictStyle = zdiff3
+
+[credential "https://github.com"]
+    helper =
+    helper = !/usr/bin/gh auth git-credential
+
+[credential "https://gist.github.com"]
+    helper =
+    helper = !/usr/bin/gh auth git-credential

@@ -1,0 +1,8 @@
+---
+git_packages:
+  - git
+
+git_config_src: "{{ playbook_dir | dirname }}/dotfiles/git/.gitconfig"
+git_config_dest: "{{ workstation_home }}/.gitconfig"
+git_user_name: ""
+git_user_email: ""

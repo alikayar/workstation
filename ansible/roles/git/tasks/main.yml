@@ -1,0 +1,25 @@
+---
+- name: Validate the Git identity
+  ansible.builtin.assert:
+    that:
+      - git_user_name | length > 0
+      - git_user_email | length > 0
+    fail_msg: >-
+      Set git_user_name and git_user_email in
+      ansible/host_vars/localhost.yml before running the Git role.
+
+- name: Install Git
+  become: true
+  ansible.builtin.apt:
+    name: "{{ git_packages }}"
+    state: present
+
+- name: Install the Git configuration
+  become: false
+  ansible.builtin.template:
+    src: "{{ git_config_src }}"
+    dest: "{{ git_config_dest }}"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0644'
+    backup: true
