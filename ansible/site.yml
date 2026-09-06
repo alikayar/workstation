@@ -18,3 +18,5 @@
   roles:
     - role: shell
       tags: [shell, zsh]
+    - role: vscode
+      tags: [vscode]
