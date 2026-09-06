@@ -18,6 +18,7 @@
 
 - Shell: Zsh, Starship, Zsh autosuggestions, and Zsh syntax highlighting.
 - CLI: bat, btop, ripgrep, fd, jq, yq, eza, GitHub CLI, and Git Delta.
+- Containers: Docker Engine, Compose, and Buildx.
 - Source control: Git with Git Delta and GitHub credential helpers.
 - Editor: VS Code with the managed extensions from this workstation project.
 - Runtimes: Mise-managed Node.js, Python, Go, and Bun versions.

@@ -28,3 +28,5 @@
       tags: [mise, runtimes]
     - role: cli_tools
       tags: [cli, cli_tools]
+    - role: docker
+      tags: [docker, containers]

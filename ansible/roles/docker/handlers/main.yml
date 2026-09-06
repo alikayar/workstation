@@ -1,0 +1,5 @@
+---
+- name: Update the APT cache after Docker repository changes
+  become: true
+  ansible.builtin.apt:
+    update_cache: true
