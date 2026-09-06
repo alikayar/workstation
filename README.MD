@@ -5,7 +5,7 @@ To me, the best development setup is a dedicated Ubuntu virtual machine running 
 I like this setup because it:
 
 - Keeps the host machine clean instead of filling it with programming languages, packages, and development tools
-- Protects the host from malicious code and supply-chain attacks
+- Reduces the host's exposure and blast radius when running development code
 - Runs all of the commands natively on Linux, regardless of the host
 - Tracks resources like CPU, memory, and disk to see performance better
 

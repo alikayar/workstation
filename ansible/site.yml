@@ -1,5 +1,5 @@
 ---
-- name: Configure the local workstation shell
+- name: Configure the local workstation
   hosts: localhost
   connection: local
   gather_facts: true

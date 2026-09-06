@@ -11,10 +11,12 @@ framework.
 - Prompt source: `dotfiles/starship/starship.toml`
 - Installed as: `~/.config/starship.toml`
 - Role: `ansible/roles/shell`
+- Login shell: `/usr/bin/zsh`
 
 ## Decisions
 
 - Zsh uses native history search and completion.
+- The role sets Zsh as the user's login shell.
 - Syntax highlighting is loaded last, as required by the plugin.
 - `mise` is initialized before Starship so the prompt can display active
   runtime versions.

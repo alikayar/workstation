@@ -7,4 +7,3 @@ docker_packages:
   - docker-ce-cli
   - docker-buildx-plugin
   - docker-compose-plugin
-  - docker-ce-rootless-extras
