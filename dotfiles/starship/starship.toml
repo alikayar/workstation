@@ -10,6 +10,10 @@ $hostname\
 $directory\
 $git_branch\
 $git_status\
+$nodejs\
+$python\
+$golang\
+$bun\
 $cmd_duration\
 $line_break\
 $container\
@@ -35,6 +39,26 @@ modified = "!${count}"
 staged = "+${count}"
 deleted = "✘${count}"
 stashed = "\\$${count}"
+
+[nodejs]
+symbol = "node "
+format = "[$symbol$version]($style) "
+style = "bold green"
+
+[python]
+symbol = "py "
+format = "[$symbol$version]($style) "
+style = "bold yellow"
+
+[golang]
+symbol = "go "
+format = "[$symbol$version]($style) "
+style = "bold cyan"
+
+[bun]
+symbol = "bun "
+format = "[$symbol$version]($style) "
+style = "bold magenta"
 
 [cmd_duration]
 min_time = 2000
