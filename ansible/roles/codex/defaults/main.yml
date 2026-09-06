@@ -1,0 +1,9 @@
+---
+codex_installer_url: https://chatgpt.com/codex/install.sh
+codex_installer_sha256: "ba92dd27e5c06f0d3bbc58bfa4b9cfb6599cd2742fbb1f92a2765e6c07dedb5a"
+codex_installer_path: /tmp/workstation-codex-install.sh
+codex_binary: "{{ workstation_home }}/.local/bin/codex"
+codex_config_dir: "{{ workstation_home }}/.codex"
+codex_config_src: "{{ playbook_dir | dirname }}/dotfiles/codex/config.toml"
+codex_agents_src: "{{ playbook_dir | dirname }}/dotfiles/codex/AGENTS.md"
+codex_rules_src: "{{ playbook_dir | dirname }}/dotfiles/codex/rules/default.rules"

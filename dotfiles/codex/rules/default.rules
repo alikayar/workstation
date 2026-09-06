@@ -1,0 +1,210 @@
+# Git history mutations.
+prefix_rule(
+    pattern = [
+        "git",
+        [
+            "commit",
+            "am",
+            "rebase",
+            "merge",
+            "cherry-pick",
+            "revert",
+        ],
+    ],
+    decision = "prompt",
+    justification = "Git history mutation requires explicit user approval.",
+    match = [
+        "git commit -m message",
+        "git commit --amend",
+        "git rebase main",
+        "git merge feature",
+        "git cherry-pick abc123",
+        "git revert abc123",
+    ],
+    not_match = [
+        "git status --short",
+        "git diff",
+        "git log --oneline",
+    ],
+)
+
+
+# Commands that can discard or remove working tree/index state.
+prefix_rule(
+    pattern = [
+        "git",
+        [
+            "checkout",
+            "clean",
+            "reset",
+            "restore",
+            "rm",
+        ],
+    ],
+    decision = "prompt",
+    justification = "This Git operation can modify or discard working tree or index state.",
+    match = [
+        "git checkout -- file.txt",
+        "git clean -fd",
+        "git reset --hard HEAD",
+        "git restore file.txt",
+        "git rm file.txt",
+    ],
+)
+
+
+# Remote publication or integration.
+prefix_rule(
+    pattern = [
+        "git",
+        [
+            "push",
+            "pull",
+        ],
+    ],
+    decision = "prompt",
+    justification = "Remote publication or integration requires explicit user approval.",
+    match = [
+        "git push origin main",
+        "git push --force-with-lease",
+        "git pull",
+        "git pull --rebase",
+    ],
+    not_match = [
+        "git fetch origin",
+        "git remote -v",
+    ],
+)
+
+
+# Destructive or forceful branch ref mutations.
+prefix_rule(
+    pattern = [
+        "git",
+        "branch",
+        [
+            "-d",
+            "-D",
+            "--delete",
+            "-f",
+            "--force",
+            "-m",
+            "-M",
+            "--move",
+        ],
+    ],
+    decision = "prompt",
+    justification = "Branch ref mutation requires explicit user approval.",
+    match = [
+        "git branch -d feature",
+        "git branch -D feature",
+        "git branch -f main abc123",
+        "git branch -m old-name new-name",
+    ],
+    not_match = [
+        "git branch",
+        "git branch --list",
+    ],
+)
+
+
+# Git's prefix-only policy language cannot reliably distinguish
+# lightweight tag creation from read-only tag queries, so all tag
+# commands are reviewed.
+prefix_rule(
+    pattern = ["git", "tag"],
+    decision = "prompt",
+    justification = "Git tag operations require explicit user approval.",
+    match = [
+        "git tag",
+        "git tag v1.0.0",
+        "git tag -a v1.0.0 -m release",
+        "git tag -d v1.0.0",
+    ],
+)
+
+
+# Low-level ref and index manipulation.
+prefix_rule(
+    pattern = [
+        "git",
+        [
+            "update-ref",
+            "update-index",
+            "filter-branch",
+            "filter-repo",
+        ],
+    ],
+    decision = "prompt",
+    justification = "Low-level Git state manipulation requires explicit user approval.",
+    match = [
+        "git update-ref refs/heads/main abc123",
+        "git update-index --assume-unchanged file.txt",
+        "git filter-branch -- --all",
+        "git filter-repo --path secret.txt --invert-paths",
+    ],
+)
+
+
+# Worktree operations that can remove or relocate worktrees.
+prefix_rule(
+    pattern = [
+        "git",
+        "worktree",
+        [
+            "remove",
+            "move",
+            "prune",
+        ],
+    ],
+    decision = "prompt",
+    justification = "Worktree removal or relocation requires explicit user approval.",
+    match = [
+        "git worktree remove ../feature",
+        "git worktree move ../old ../new",
+        "git worktree prune",
+    ],
+    not_match = [
+        "git worktree list",
+        "git worktree add ../feature feature",
+    ],
+)
+
+
+# Recovery history cleanup.
+prefix_rule(
+    pattern = ["git", "reflog", "expire"],
+    decision = "prompt",
+    justification = "Reflog expiration can remove recovery history.",
+)
+
+
+# Git object cleanup.
+prefix_rule(
+    pattern = [
+        "git",
+        [
+            "gc",
+            "prune",
+        ],
+    ],
+    decision = "prompt",
+    justification = "Git object cleanup can permanently remove unreachable objects.",
+    match = [
+        "git gc",
+        "git gc --prune=now",
+        "git prune",
+    ],
+)
+
+
+# Remote pull request merge.
+prefix_rule(
+    pattern = ["gh", "pr", "merge"],
+    decision = "prompt",
+    justification = "Pull request merge requires explicit user approval.",
+    match = [
+        "gh pr merge 123",
+        "gh pr merge 123 --squash",
+    ],
+)
