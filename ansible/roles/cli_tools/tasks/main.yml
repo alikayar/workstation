@@ -35,3 +35,38 @@
     dest: "{{ workstation_home }}/.local/bin/bat"
     state: link
     force: true
+
+- name: Validate the supported CPU architecture for yq
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['architecture'] in ['x86_64', 'aarch64']
+    fail_msg: >-
+      The managed yq release supports x86_64 and aarch64; found
+      {{ ansible_facts['architecture'] }}.
+
+- name: Select the yq release architecture
+  ansible.builtin.set_fact:
+    cli_tools_yq_arch: >-
+      {{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' }}
+
+- name: Check the installed yq version
+  become: false
+  ansible.builtin.command: "{{ workstation_home }}/.local/bin/yq --version"
+  register: cli_tools_yq_installed
+  changed_when: false
+  failed_when: false
+
+- name: Install the pinned Mike Farah yq release
+  become: false
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/mikefarah/yq/releases/download/v{{ cli_tools_yq_version
+      }}/yq_linux_{{ cli_tools_yq_arch }}
+    dest: "{{ workstation_home }}/.local/bin/yq"
+    checksum: "sha256:{{ cli_tools_yq_checksums[cli_tools_yq_arch] }}"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0755'
+  when: >-
+    cli_tools_yq_installed.rc != 0 or
+    ('v' ~ cli_tools_yq_version) not in cli_tools_yq_installed.stdout
