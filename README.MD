@@ -35,22 +35,12 @@ Run Ansible playbook
 Everything is ready
 ```
 
-Ansible is a good fit here because playbooks and roles are easier to manage than shell scripts. Also, it doesn't break even if you run the same playbooks again and again.
+Ansible is a good fit here because playbooks and roles are easier to manage than shell scripts. The tasks are designed to be idempotent, so re-running the playbook should converge on the same workstation state.
 
-## First-time setup
+## Getting started
 
-Install Ansible and the Debian support library once:
-
-```bash
-sudo apt-get update
-sudo apt-get install --yes ansible-core python3-debian
-```
-
-Then run the workstation playbook from the repository root:
-
-```bash
-ansible-playbook ansible/site.yml --ask-become-pass
-```
+Follow the [getting started guide](docs/getting-started.md) for prerequisites,
+Git identity setup, previewing changes, and applying the playbook.
 
 ## Documentation
 
