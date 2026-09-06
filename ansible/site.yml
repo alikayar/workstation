@@ -1,0 +1,20 @@
+---
+- name: Configure the local workstation shell
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  pre_tasks:
+    - name: Validate the workstation user
+      ansible.builtin.assert:
+        that:
+          - workstation_user | length > 0
+          - workstation_user != 'root'
+          - workstation_home is match('^/')
+        fail_msg: >-
+          Run Ansible as the intended non-root user so USER and HOME point to
+          the account that should receive the Zsh configuration.
+
+  roles:
+    - role: shell
+      tags: [shell, zsh]
