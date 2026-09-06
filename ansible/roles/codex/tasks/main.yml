@@ -1,0 +1,82 @@
+---
+- name: Ensure the user-local binary directory exists
+  become: false
+  ansible.builtin.file:
+    path: "{{ codex_binary | dirname }}"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0755'
+
+- name: Check whether Codex is installed
+  become: false
+  ansible.builtin.command: "{{ codex_binary }} --version"
+  register: codex_version
+  changed_when: false
+  failed_when: false
+
+- name: Download the pinned Codex installer
+  become: false
+  ansible.builtin.get_url:
+    url: "{{ codex_installer_url }}"
+    dest: "{{ codex_installer_path }}"
+    checksum: "sha256:{{ codex_installer_sha256 }}"
+    mode: '0700'
+  when: codex_version.rc != 0
+
+- name: Install Codex
+  become: false
+  ansible.builtin.command: "/bin/sh {{ codex_installer_path }}"
+  environment:
+    CODEX_NON_INTERACTIVE: '1'
+  when:
+    - not ansible_check_mode
+    - codex_version.rc != 0
+  changed_when: true
+
+- name: Remove the Codex installer
+  become: false
+  ansible.builtin.file:
+    path: "{{ codex_installer_path }}"
+    state: absent
+
+- name: Ensure the Codex configuration directories exist
+  become: false
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ codex_config_dir }}"
+      mode: '0700'
+    - path: "{{ codex_config_dir }}/rules"
+      mode: '0700'
+
+- name: Install the Codex configuration
+  become: false
+  ansible.builtin.copy:
+    src: "{{ codex_config_src }}"
+    dest: "{{ codex_config_dir }}/config.toml"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0600'
+
+- name: Install the Codex global instructions
+  become: false
+  ansible.builtin.copy:
+    src: "{{ codex_agents_src }}"
+    dest: "{{ codex_config_dir }}/AGENTS.md"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0644'
+
+- name: Install the Codex command rules
+  become: false
+  ansible.builtin.copy:
+    src: "{{ codex_rules_src }}"
+    dest: "{{ codex_config_dir }}/rules/default.rules"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0644'

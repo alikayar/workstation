@@ -22,3 +22,5 @@
       tags: [vscode]
     - role: git
       tags: [git]
+    - role: codex
+      tags: [codex]
