@@ -13,6 +13,11 @@ rules.
 
 ## Design decisions
 
+> **Security warning:** This configuration intentionally gives Codex full
+> access inside the development VM. Do not copy it to a host environment or a
+> machine containing sensitive data without reviewing the sandbox and approval
+> policy first.
+
 - `config.toml` is copied to `~/.codex/config.toml`.
 - `AGENTS.md` is copied to `~/.codex/AGENTS.md`.
 - Command rules are copied to `~/.codex/rules/default.rules`.
@@ -25,4 +30,3 @@ rules.
 The rules file is a safety policy for potentially destructive operations. It
 is reviewed as configuration, not treated as a replacement for checking the
 working tree and reviewing diffs.
-

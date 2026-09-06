@@ -107,7 +107,7 @@ to each tool's official documentation.
 - **Source repository:** https://github.com/mikefarah/yq
 - **Managed by:** `cli_tools`
 - **Why:** Complements `jq` for Ansible and other configuration-heavy workflows.
-- **Notes:** The Ubuntu package version is intentionally documented separately from the upstream v4 release model.
+- **Notes:** Workstation installs the upstream Linux binary with a pinned version and checksum instead of Ubuntu's package.
 
 ## ripgrep
 
