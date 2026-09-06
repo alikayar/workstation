@@ -37,6 +37,28 @@ Everything is ready
 
 Ansible is a good fit here because playbooks and roles are easier to manage than shell scripts. Also, it doesn't break even if you run the same playbooks again and again.
 
+## First-time setup
+
+Install Ansible and the Debian support library once:
+
+```bash
+sudo apt-get update
+sudo apt-get install --yes ansible-core python3-debian
+```
+
+Then run the workstation playbook from the repository root:
+
+```bash
+ansible-playbook ansible/site.yml --ask-become-pass
+```
+
+## Documentation
+
+See [docs/tools.md](docs/tools.md) for the managed tool inventory and the
+reason each tool belongs in the workstation. Design and policy notes for the
+more complex parts live in [docs/shell.md](docs/shell.md),
+[docs/mise.md](docs/mise.md), and [docs/codex.md](docs/codex.md).
+
 ## Contributions
 
 I am not actively looking for any contributions.
