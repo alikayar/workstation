@@ -147,15 +147,6 @@ to each tool's official documentation.
 - **Why:** Container tooling is a core development dependency for local services and reproducible environments.
 - **Notes:** The user is added to the `docker` group; this grants root-equivalent access to the Docker host.
 
-## VS Code
-
-- **Purpose:** Graphical code editor.
-- **Package / command:** existing `code` CLI / `code`
-- **Official docs:** https://code.visualstudio.com/docs
-- **Source repository:** https://github.com/microsoft/vscode
-- **Managed by:** `vscode`
-- **Why:** Keeps the selected editor extensions reproducible without managing the editor installation itself.
-
 ## Codex CLI
 
 - **Purpose:** Local coding agent for repository work.
