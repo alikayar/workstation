@@ -10,6 +10,9 @@ permissions:
 jobs:
   ansible:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ANSIBLE_NOCOLOR: '1'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
@@ -18,7 +21,25 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes ansible-core ansible-lint python3-debian
+          echo /usr/bin >> "$GITHUB_PATH"
+      - name: Verify Ansible toolchain
+        run: |
+          test "$(command -v ansible)" = /usr/bin/ansible
+          test "$(command -v ansible-playbook)" = /usr/bin/ansible-playbook
+          test "$(command -v ansible-lint)" = /usr/bin/ansible-lint
+          ansible --version
+          ansible-lint --version
       - name: Check playbook syntax
         run: ansible-playbook ansible/site.yml --syntax-check
       - name: Lint playbook and roles
         run: ansible-lint ansible/site.yml
+      - name: Set test Git identity
+        run: cp ansible/host_vars/localhost.example.yml ansible/host_vars/localhost.yml
+      - name: Apply workstation configuration
+        run: ansible-playbook ansible/site.yml
+      - name: Verify idempotency
+        shell: bash
+        run: |
+          set -o pipefail
+          ansible-playbook ansible/site.yml | tee "${RUNNER_TEMP}/workstation-second-run.log"
+          grep -Eq '^localhost[[:space:]]*:[[:space:]]+ok=[0-9]+[[:space:]]+changed=0([[:space:]]|$)' "${RUNNER_TEMP}/workstation-second-run.log"
