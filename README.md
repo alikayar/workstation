@@ -15,7 +15,7 @@
 ## Design goals
 
 - **Reproducible:** workstation configuration lives in version control.
-- **Idempotent:** roles are designed to be safe to run again.
+- **Idempotent:** CI applies the playbook twice and requires `changed=0` on the second run.
 - **Isolated:** development tools run inside an Ubuntu VM.
 - **Modular:** Ansible roles can be applied independently with tags.
 
