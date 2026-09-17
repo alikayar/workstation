@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ansible:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install Ansible checks
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ansible-core ansible-lint python3-debian
+      - name: Check playbook syntax
+        run: ansible-playbook ansible/site.yml --syntax-check
+      - name: Lint playbook and roles
+        run: ansible-lint ansible/site.yml
