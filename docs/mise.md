@@ -6,19 +6,14 @@ configuration instead of maintaining separate version managers.
 - **Official docs:** https://mise.jdx.dev/
 - **Source repository:** https://github.com/jdx/mise
 - **Managed by:** `mise`
-- **Configuration:** `dotfiles/mise/config.toml`
+- **Configuration:** [dotfiles/mise/config.toml](../dotfiles/mise/config.toml)
 - **Installed as:** `~/.config/mise/config.toml`
 - **Binary:** `~/.local/bin/mise`
 
 ## Managed runtimes
 
-```toml
-[tools]
-node = "24.20.0"
-python = "3.14.7"
-go = "1.26.5"
-bun = "1.4.2"
-```
+The [mise configuration](../dotfiles/mise/config.toml) pins the Node.js,
+Python, Go, and Bun versions installed by the `mise` role.
 
 ## Why
 
