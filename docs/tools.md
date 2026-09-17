@@ -1,158 +1,37 @@
 # Workstation tools
 
-This is the inventory and rationale for the tools managed by Workstation.
-Installation details belong to the owning Ansible role; usage details belong
-to each tool's official documentation.
+This inventory shows what each tool contributes and how Workstation provisions
+it. Versions and installation details live in the Ansible roles or linked
+configuration files.
 
-## Ansible
+| Tool | Role in workstation | Provisioning | Reference |
+| --- | --- | --- | --- |
+| Ansible (`ansible-playbook`) | Apply the workstation configuration. | Prerequisite: `ansible-core`. | [Documentation](https://docs.ansible.com/ansible/latest/) |
+| Zsh | Interactive shell with managed history, completion, and aliases. | `shell` role: `zsh`. | [Documentation](https://zsh.sourceforge.io/Doc/) |
+| Starship | Prompt for the managed Zsh environment. | `shell` role: pinned release binary. | [Documentation](https://starship.rs/config/) |
+| zsh-autosuggestions | Suggest commands while typing. | `shell` role: Ubuntu package. | [Repository](https://github.com/zsh-users/zsh-autosuggestions) |
+| zsh-syntax-highlighting | Highlight command syntax. | `shell` role: Ubuntu package. | [Repository](https://github.com/zsh-users/zsh-syntax-highlighting) |
+| Git | Version control with managed identity and defaults. | `git` role: Ubuntu package and `.gitconfig`. | [Documentation](https://git-scm.com/doc) |
+| Git Delta (`delta`) | Readable Git diffs. | `cli_tools` role: `git-delta`. | [Documentation](https://dandavison.github.io/delta/) |
+| GitHub CLI (`gh`) | GitHub commands and Git credential helper. | `cli_tools` role: `gh`. | [Documentation](https://cli.github.com/manual/) |
+| mise | Manage pinned Node.js, Python, Go, and Bun runtimes. | `mise` role: installer and [runtime configuration](../dotfiles/mise/config.toml); `shell` role: Zsh activation. | [Documentation](https://mise.jdx.dev/) |
+| bat | Read source files with syntax highlighting. | `cli_tools` role: `bat`. | [Repository](https://github.com/sharkdp/bat#usage) |
+| btop | Monitor VM resource usage. | `cli_tools` role: `btop`. | [Repository](https://github.com/aristocratos/btop#documentation) |
+| eza | Git-aware file listings and shell aliases. | `cli_tools` role: `eza`; `shell` role: aliases. | [Repository](https://github.com/eza-community/eza#command-line-options) |
+| fd | Search for files and directories. | `cli_tools` role: `fd-find`. | [Repository](https://github.com/sharkdp/fd#how-to-use) |
+| jq | Query and transform JSON. | `cli_tools` role: `jq`. | [Documentation](https://jqlang.org/manual/) |
+| yq | Query and transform YAML and related formats. | `cli_tools` role: pinned binary with checksum. | [Documentation](https://mikefarah.gitbook.io/yq/) |
+| ripgrep (`rg`) | Search source code and text. | `cli_tools` role: `ripgrep`. | [Repository](https://github.com/BurntSushi/ripgrep#user-guide) |
+| Docker Engine, Compose, Buildx | Run containers and build images. | `docker` role: official Docker APT repository and packages. | [Documentation](https://docs.docker.com/) |
+| Codex CLI | Coding agent with managed configuration and rules. | `codex` role: pinned installer and dotfiles. | [Documentation](https://developers.openai.com/codex/cli) |
 
-- **Purpose:** Apply the workstation configuration idempotently.
-- **Package / command:** `ansible-core` / `ansible-playbook`
-- **Official docs:** https://docs.ansible.com/ansible/latest/
-- **Source repository:** https://github.com/ansible/ansible
-- **Managed by:** Prerequisite for the project
-- **Why:** The workstation should be reproducible and safe to re-apply.
+## Implementation notes
 
-## Zsh
-
-- **Purpose:** Interactive shell for the development environment.
-- **Package / command:** `zsh` / `zsh`
-- **Official docs:** https://zsh.sourceforge.io/Doc/
-- **Source repository:** https://github.com/zsh-users/zsh
-- **Managed by:** `shell`
-- **Why:** Provides a capable, configurable shell with predictable interactive behavior.
-
-## Starship
-
-- **Purpose:** Cross-shell prompt.
-- **Package / command:** release binary / `starship`
-- **Official docs:** https://starship.rs/config/
-- **Source repository:** https://github.com/starship/starship
-- **Managed by:** `shell`
-- **Why:** Keeps prompt information readable and portable across environments.
-
-## Zsh integrations
-
-### zsh-autosuggestions
-
-- **Purpose:** Suggest commands from shell history while typing.
-- **Package / command:** `zsh-autosuggestions` / Zsh plugin
-- **Official docs:** https://github.com/zsh-users/zsh-autosuggestions
-- **Source repository:** https://github.com/zsh-users/zsh-autosuggestions
-- **Managed by:** `shell`
-- **Why:** Speeds up repeated commands without replacing Zsh's native history behavior.
-
-### zsh-syntax-highlighting
-
-- **Purpose:** Highlight valid and invalid command syntax interactively.
-- **Package / command:** `zsh-syntax-highlighting` / Zsh plugin
-- **Official docs:** https://github.com/zsh-users/zsh-syntax-highlighting
-- **Source repository:** https://github.com/zsh-users/zsh-syntax-highlighting
-- **Managed by:** `shell`
-- **Why:** Catches malformed commands before they are executed.
-- **Notes:** It is sourced last in `.zshrc` because it must see the final Zsh line-editor state.
-
-## bat
-
-- **Purpose:** Read files in the terminal with syntax highlighting and line numbers.
-- **Package / command:** `bat` / `bat`
-- **Official docs:** https://github.com/sharkdp/bat#usage
-- **Source repository:** https://github.com/sharkdp/bat
-- **Managed by:** `cli_tools`
-- **Why:** Preferred terminal file viewer for source code and configuration files.
-- **Notes:** Ubuntu exposes the binary as `batcat`; Workstation provides `~/.local/bin/bat`.
-
-## btop
-
-- **Purpose:** Interactive resource monitor for CPU, memory, disks, network, and processes.
-- **Package / command:** `btop` / `btop`
-- **Official docs:** https://github.com/aristocratos/btop#documentation
-- **Source repository:** https://github.com/aristocratos/btop
-- **Managed by:** `cli_tools`
-- **Why:** A VM workstation needs a quick way to diagnose resource pressure.
-
-## eza
-
-- **Purpose:** Modern, Git-aware replacement for `ls`.
-- **Package / command:** `eza` / `eza`
-- **Official docs:** https://github.com/eza-community/eza#command-line-options
-- **Source repository:** https://github.com/eza-community/eza
-- **Managed by:** `cli_tools` and `shell`
-- **Why:** The shell aliases use its Git status, tree, sorting, and readable output.
-
-## fd
-
-- **Purpose:** Fast, user-friendly file and directory search.
-- **Package / command:** `fd-find` / `fd`
-- **Official docs:** https://github.com/sharkdp/fd#how-to-use
-- **Source repository:** https://github.com/sharkdp/fd
-- **Managed by:** `cli_tools`
-- **Why:** Faster and safer default for interactive file discovery than handwritten `find` commands.
-- **Notes:** Ubuntu exposes `fdfind`; Workstation provides `~/.local/bin/fd`.
-
-## jq
-
-- **Purpose:** Query and transform JSON data from the command line.
-- **Package / command:** `jq` / `jq`
-- **Official docs:** https://jqlang.org/manual/
-- **Source repository:** https://github.com/jqlang/jq
-- **Managed by:** `cli_tools`
-- **Why:** JSON is common in APIs, automation, and development tooling.
-
-## yq
-
-- **Purpose:** Query and transform YAML, JSON, XML, and related structured data.
-- **Package / command:** `yq` / `yq`
-- **Official docs:** https://mikefarah.gitbook.io/yq/
-- **Source repository:** https://github.com/mikefarah/yq
-- **Managed by:** `cli_tools`
-- **Why:** Complements `jq` for Ansible and other configuration-heavy workflows.
-- **Notes:** Workstation installs the upstream Linux binary with a pinned version and checksum instead of Ubuntu's package.
-
-## ripgrep
-
-- **Purpose:** Fast recursive text and source-code search.
-- **Package / command:** `ripgrep` / `rg`
-- **Official docs:** https://github.com/BurntSushi/ripgrep#user-guide
-- **Source repository:** https://github.com/BurntSushi/ripgrep
-- **Managed by:** `cli_tools`
-- **Why:** Primary text/code search tool for both interactive use and automation.
-
-## Git and Git Delta
-
-- **Purpose:** Version control and readable side-by-side diffs.
-- **Package / command:** `git`, `git-delta` / `git`, `delta`
-- **Official docs:** https://git-scm.com/doc and https://dandavison.github.io/delta/
-- **Source repository:** https://github.com/git/git and https://github.com/dandavison/delta
-- **Managed by:** `git` and `cli_tools`
-- **Why:** Git is the source-control baseline; Delta makes review-oriented workflows easier to read.
-- **Notes:** GitHub and Gist credential helpers use the GitHub CLI.
-
-## GitHub CLI
-
-- **Purpose:** Work with GitHub repositories, issues, pull requests, and authentication from the terminal.
-- **Package / command:** `gh` / `gh`
-- **Official docs:** https://cli.github.com/manual/
-- **Source repository:** https://github.com/cli/cli
-- **Managed by:** `cli_tools`
-- **Why:** Keeps common GitHub operations close to the repository and supports Git credential integration.
-
-## Docker
-
-- **Purpose:** Run containers and build multi-stage/containerized applications.
-- **Package / command:** Docker Engine, Compose, Buildx / `docker`
-- **Official docs:** https://docs.docker.com/
-- **Source repository:** https://github.com/docker
-- **Managed by:** `docker`
-- **Why:** Container tooling is a core development dependency for local services and reproducible environments.
-- **Notes:** The user is added to the `docker` group; this grants root-equivalent access to the Docker host.
-
-## Codex CLI
-
-- **Purpose:** Local coding agent for repository work.
-- **Package / command:** official installer / `codex`
-- **Official docs:** https://developers.openai.com/codex/cli
-- **Source repository:** https://github.com/openai/codex
-- **Managed by:** `codex`
-- **Why:** Makes the coding-agent configuration, rules, and approved integrations reproducible.
-- **Notes:** Configuration policy is documented in [codex.md](codex.md).
+- Zsh syntax highlighting is sourced last in `.zshrc`; see the [shell design](shell.md).
+- Ubuntu names the bat and fd binaries `batcat` and `fdfind`. The `cli_tools`
+  role provides `bat` and `fd` symlinks in `~/.local/bin`.
+- The managed Git configuration uses `gh` as the credential helper for GitHub
+  and Gist. Authentication state is not stored in this repository.
+- Docker group membership grants root-equivalent access to the Docker host.
+- Codex configuration includes a local Playwright MCP endpoint, but does not
+  start that server; see the [Codex notes](codex.md).
