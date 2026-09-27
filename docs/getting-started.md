@@ -1,7 +1,6 @@
 # Getting started
 
-Workstation targets an Ubuntu development environment. The machine needs
-internet access and a user with `sudo` access.
+Workstation targets an Ubuntu development environment. The machine needs internet access and a user with `sudo` access.
 
 ## Install Ansible
 
@@ -14,8 +13,7 @@ sudo apt-get install --yes ansible-core python3-debian
 
 ## Set your Git identity
 
-Create the local host variables file and set the identity used by the managed
-`.gitconfig`:
+Create the local host variables file and set the identity used by the managed `.gitconfig`:
 
 ```bash
 cp ansible/host_vars/localhost.example.yml ansible/host_vars/localhost.yml

@@ -2,8 +2,7 @@
 
 <p align="center">
   Reproducible Ubuntu development environment managed with Ansible.<br>
-  Configures an Ubuntu development VM across three areas: dotfiles, developer
-  tools, and runtimes &amp; containers.
+  Configures an Ubuntu development VM across three areas: dotfiles, developer tools, and runtimes &amp; containers.
 </p>
 
 <p align="center">
@@ -33,8 +32,7 @@ flowchart LR
 
 - **Dotfiles:** Zsh, Git, Starship, and Codex CLI configuration.
 - **Developer tools:** GitHub CLI, Delta, bat, fd, ripgrep, jq, and yq.
-- **Runtimes & containers:** language runtimes via mise; Docker Engine, Compose,
-  and Buildx.
+- **Runtimes & containers:** language runtimes via mise; Docker Engine, Compose, and Buildx.
 
 ## Quick start
 
@@ -62,7 +60,4 @@ ansible-playbook ansible/site.yml --ask-become-pass
 
 ## Documentation
 
-See the [setup guide](docs/getting-started.md), [tool inventory](docs/tools.md),
-and design notes for [shell](docs/shell.md), [mise](docs/mise.md), and
-[Codex](docs/codex.md). This personal workstation configuration is shared as a
-reference under the [MIT License](LICENSE).
+See the [setup guide](docs/getting-started.md), [tool inventory](docs/tools.md), and design notes for [shell](docs/shell.md), [mise](docs/mise.md), and [Codex](docs/codex.md). This personal workstation configuration is shared as a reference under the [MIT License](LICENSE).

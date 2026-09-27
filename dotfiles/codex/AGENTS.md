@@ -34,3 +34,7 @@
 - Review diffs before mutating or committing files.
 - Never inspect or copy credentials, private keys, authentication state, or
   shell history.
+
+## Documentation formatting
+
+- Never hard-wrap Markdown prose. Keep each paragraph on one line; break lines only between paragraphs. Preserve structural lines such as headings, list items, tables, and code blocks.
