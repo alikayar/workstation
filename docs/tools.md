@@ -1,8 +1,6 @@
 # Workstation tools
 
-This inventory shows what each tool contributes and how Workstation provisions
-it. Versions and installation details live in the Ansible roles or linked
-configuration files.
+This inventory shows what each tool contributes and how Workstation provisions it. Versions and installation details live in the Ansible roles or linked configuration files.
 
 | Tool | Role in workstation | Provisioning | Reference |
 | --- | --- | --- | --- |
@@ -28,10 +26,7 @@ configuration files.
 ## Implementation notes
 
 - Zsh syntax highlighting is sourced last in `.zshrc`; see the [shell design](shell.md).
-- Ubuntu names the bat and fd binaries `batcat` and `fdfind`. The `cli_tools`
-  role provides `bat` and `fd` symlinks in `~/.local/bin`.
-- The managed Git configuration uses `gh` as the credential helper for GitHub
-  and Gist. Authentication state is not stored in this repository.
+- Ubuntu names the bat and fd binaries `batcat` and `fdfind`. The `cli_tools` role provides `bat` and `fd` symlinks in `~/.local/bin`.
+- The managed Git configuration uses `gh` as the credential helper for GitHub and Gist. Authentication state is not stored in this repository.
 - Docker group membership grants root-equivalent access to the Docker host.
-- Codex configuration includes a local Playwright MCP endpoint, but does not
-  start that server; see the [Codex notes](codex.md).
+- Codex configuration includes a local Playwright MCP endpoint, but does not start that server; see the [Codex notes](codex.md).
