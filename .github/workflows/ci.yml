@@ -9,7 +9,11 @@ permissions:
 
 jobs:
   ansible:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
       ANSIBLE_NOCOLOR: '1'
@@ -20,7 +24,7 @@ jobs:
       - name: Install Ansible checks
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ansible-core ansible-lint python3-debian
+          sudo apt-get install --yes ansible-core ansible-lint python3-debian sudo
           echo /usr/bin >> "$GITHUB_PATH"
       - name: Verify Ansible toolchain
         run: |
@@ -32,7 +36,7 @@ jobs:
       - name: Check playbook syntax
         run: ansible-playbook ansible/site.yml --syntax-check
       - name: Lint playbook and roles
-        run: ansible-lint ansible/site.yml
+        run: ansible-lint ansible/site.yml tests/preflight.yml
       - name: Set test Git identity
         run: cp ansible/host_vars/localhost.example.yml ansible/host_vars/localhost.yml
       - name: Apply workstation configuration
@@ -43,3 +47,21 @@ jobs:
           set -o pipefail
           ansible-playbook ansible/site.yml | tee "${RUNNER_TEMP}/workstation-second-run.log"
           grep -Eq '^localhost[[:space:]]*:[[:space:]]+ok=[0-9]+[[:space:]]+changed=0([[:space:]]|$)' "${RUNNER_TEMP}/workstation-second-run.log"
+
+  privilege-escalation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ['24.04', '26.04']
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Verify sudo selection and password authentication in an isolated Ubuntu
+        run: >-
+          docker run --rm
+          --mount type=bind,source="${{ github.workspace }}",target=/workstation,readonly
+          ubuntu:${{ matrix.ubuntu }}
+          bash /workstation/tests/preflight.sh

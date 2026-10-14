@@ -1,4 +1,14 @@
 ---
+- name: Require systemd for the managed Docker Engine
+  become: false
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['service_mgr'] == 'systemd'
+    fail_msg: >-
+      The Docker role manages a native systemd service. On WSL 2, enable
+      systemd and restart the distribution before applying this role.
+      If using Docker Desktop integration, run with --skip-tags docker instead.
+
 - name: Install Docker repository prerequisites
   become: true
   ansible.builtin.apt:

@@ -1,0 +1,43 @@
+---
+- name: Validate the workstation platform
+  become: false
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] is version('24.04', '>=')
+      - ansible_facts['architecture'] in ['x86_64', 'aarch64']
+    fail_msg: >-
+      Workstation requires Ubuntu 24.04 or later on x86_64 or aarch64.
+      Ubuntu 24.04 LTS and 26.04 LTS are the CI targets.
+
+- name: Validate the workstation user
+  become: false
+  ansible.builtin.assert:
+    that:
+      - workstation_user | length > 0
+      - workstation_user != 'root'
+      - workstation_home is match('^/')
+    fail_msg: >-
+      Run Ansible as the intended non-root user so USER and HOME point to
+      the account that should receive the Zsh configuration.
+
+- name: Check for the classic sudo executable
+  become: false
+  ansible.builtin.stat:
+    path: /usr/bin/sudo.ws
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: workstation_classic_sudo
+
+# sudo-rs prompts are incompatible with some distribution-packaged Ansible versions.
+# Respect host/CLI variables and the configured become executable before selecting a default.
+- name: Prefer classic sudo when no executable override was supplied
+  become: false
+  ansible.builtin.set_fact:
+    ansible_become_exe: /usr/bin/sudo.ws
+  when:
+    - ansible_become_exe is not defined
+    - (lookup('ansible.builtin.config', 'DEFAULT_BECOME_EXE') | default('sudo', true)) == 'sudo'
+    - workstation_classic_sudo.stat.exists
+    - workstation_classic_sudo.stat.executable | default(false)

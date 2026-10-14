@@ -1,0 +1,30 @@
+---
+- name: Verify workstation privilege escalation
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars_files:
+    - ../ansible/group_vars/all.yml
+  tasks:
+    - name: Run the real preflight tasks
+      ansible.builtin.import_tasks: ../ansible/tasks/preflight.yml
+      tags: [always]
+
+    - name: Verify the selected become executable
+      ansible.builtin.assert:
+        that:
+          - (ansible_become_exe | default(lookup('ansible.builtin.config', 'DEFAULT_BECOME_EXE'), true) | default('sudo', true)) == expected_become_exe
+      tags: [always]
+
+    - name: Authenticate using a password and verify root privileges
+      become: true
+      ansible.builtin.command: id -u
+      register: preflight_root
+      changed_when: false
+      tags: [probe]
+
+    - name: Verify privileged execution
+      ansible.builtin.assert:
+        that:
+          - preflight_root.stdout == '0'
+      tags: [probe]
