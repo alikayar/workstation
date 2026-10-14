@@ -31,8 +31,8 @@ flowchart LR
 ## What it manages
 
 - **Dotfiles:** Zsh, Git, Starship, and Codex CLI configuration.
-- **Developer tools:** GitHub CLI, Delta, bat, fd, ripgrep, jq, and yq.
-- **Runtimes & containers:** language runtimes via mise; Docker Engine, Compose, and Buildx.
+- **Developer tools:** GitHub CLI, Delta, bat, fd, ripgrep, ast-grep, jq, yq, fzf, zoxide, tmux, FFmpeg and opt-in validation tools.
+- **Runtimes & containers:** language runtimes and pinned CLI tools via mise; uv Python environments; Docker Engine, Compose and Buildx.
 
 ## Quick start
 

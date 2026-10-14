@@ -17,7 +17,9 @@ enabled = true
 enabled = true
 
 [mcp_servers.playwright]
-url = "http://localhost:8931/mcp"
+command = "sh"
+args = ["-c", 'exec "$HOME/.local/bin/workstation-playwright"']
+startup_timeout_sec = 120
 enabled_tools = [
   "browser_click",
   "browser_close",
@@ -36,6 +38,7 @@ enabled_tools = [
   "browser_network_requests",
   "browser_press_key",
   "browser_resize",
+  "browser_run_code",
   "browser_run_code_unsafe",
   "browser_select_option",
   "browser_snapshot",
@@ -47,4 +50,7 @@ enabled_tools = [
 default_tools_approval_mode = "approve"
 
 [mcp_servers.playwright.tools.browser_run_code_unsafe]
+approval_mode = "prompt"
+
+[mcp_servers.playwright.tools.browser_run_code]
 approval_mode = "prompt"

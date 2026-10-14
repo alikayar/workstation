@@ -3,3 +3,11 @@ node = "24.20.0"
 python = "3.14.7"
 go = "1.26.5"
 bun = "1.4.2"
+
+# Shared CLI defaults; project-local versions and lockfiles take precedence.
+uv = "0.13.1"
+ruff = "0.17.0"
+"ast-grep" = "0.50.0"
+actionlint = "1.7.12"
+fzf = "0.74.5"
+zoxide = "0.10.0"

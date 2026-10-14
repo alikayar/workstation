@@ -47,6 +47,32 @@ After Docker adds the user to its group, start a new terminal or run:
 newgrp docker
 ```
 
+## Terminal still opens Bash
+
+The shell role sets the account's login shell to `/usr/bin/zsh`. Verify the account setting separately from the current process:
+
+```bash
+getent passwd "$(id -un)" | cut -d: -f7
+ps -p $$ -o comm=
+```
+
+If the first command returns `/usr/bin/zsh` and the second returns `bash`, the account setting is correct. An already running Bash session does not change when the playbook updates the login shell. Enter Zsh in that terminal with:
+
+```bash
+exec /usr/bin/zsh -l
+```
+
+If newly opened terminals also start Bash, inspect the terminal application's profile. Workstation does not rewrite Windows Terminal or VS Code settings, or redirect intentional Bash sessions through `.bashrc`.
+
+For VS Code connected through WSL or Remote-SSH, run **Terminal: Select Default Profile** in the remote window and select **zsh**, then create a new terminal. If the detected shell/profile is stale, close and reconnect the remote window. A remote Linux profile can explicitly use `/usr/bin/zsh` with `-l`; configure it in the remote settings rather than changing unrelated local Windows profiles. See [VS Code terminal profiles](https://code.visualstudio.com/docs/terminal/profiles).
+
+For Windows Terminal, open the Ubuntu profile's **Command line** setting. Use the WSL distribution's default shell instead of an explicit `bash`, `-e bash` or `--exec bash` command. Preserve the intended distribution and any other profile-specific settings. See [Windows Terminal profile settings](https://learn.microsoft.com/en-us/windows/terminal/customize-settings/profile-general).
+
+If the account setting itself is still Bash, apply the shell role as the intended Ubuntu user and then start a fresh session:
+
+```bash
+ansible-playbook ansible/site.yml --tags shell --ask-become-pass
+```
 
 ## Sudo compatibility
 

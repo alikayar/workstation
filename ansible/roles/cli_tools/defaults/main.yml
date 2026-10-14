@@ -8,6 +8,10 @@ cli_tools_packages:
   - git-delta
   - jq
   - ripgrep
+  - shellcheck
+  - ffmpeg
+  - tmux
+  - hyperfine
 
 cli_tools_yq_version: "4.53.6"
 cli_tools_yq_checksums:
