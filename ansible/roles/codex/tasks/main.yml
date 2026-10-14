@@ -80,3 +80,21 @@
     owner: "{{ workstation_user }}"
     group: "{{ workstation_user }}"
     mode: '0644'
+
+- name: Ensure the Playwright artifact directory exists
+  become: false
+  ansible.builtin.file:
+    path: "{{ codex_playwright_output_dir }}"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0700'
+
+- name: Install the on-demand Playwright MCP launcher
+  become: false
+  ansible.builtin.template:
+    src: playwright-mcp.sh.j2
+    dest: "{{ workstation_home }}/.local/bin/workstation-playwright"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0755'

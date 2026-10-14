@@ -1,0 +1,8 @@
+#!/bin/sh
+# Docker's entrypoint starts a headless Chromium MCP server over stdio.
+# Only the artifact directory is shared; project files and credentials are not mounted.
+exec docker run --rm -i --init --network host \
+  --user "$(id -u):$(id -g)" --workdir /output \
+  --mount {{ ('type=bind,source=' ~ codex_playwright_output_dir ~ ',target=/output') | quote }} \
+  {{ codex_playwright_image | quote }} \
+  --isolated --output-dir /output

@@ -20,6 +20,17 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | jq | Query and transform JSON. | `cli_tools` role: `jq`. | [Documentation](https://jqlang.org/manual/) |
 | yq | Query and transform YAML and related formats. | `cli_tools` role: pinned binary with checksum. | [Documentation](https://mikefarah.gitbook.io/yq/) |
 | ripgrep (`rg`) | Search source code and text. | `cli_tools` role: `ripgrep`. | [Repository](https://github.com/BurntSushi/ripgrep#user-guide) |
+| uv | Isolated Python environments, dependency resolution and project execution. | Pinned mise tool. | [Documentation](https://docs.astral.sh/uv/) |
+| ast-grep | Structural code search and rewriting. | Pinned mise tool; use `ast-grep` to avoid Ubuntu's unrelated `sg` command. | [Documentation](https://ast-grep.github.io/guide/quick-start.html) |
+| Ruff | Python linting and formatting when explicitly requested. | Pinned mise tool; project configuration takes precedence. | [Documentation](https://docs.astral.sh/ruff/) |
+| ShellCheck | Shell script diagnostics when explicitly requested. | `cli_tools` role: `shellcheck`. | [Repository](https://github.com/koalaman/shellcheck) |
+| actionlint | GitHub Actions workflow diagnostics when explicitly requested. | Pinned mise tool. | [Repository](https://github.com/rhysd/actionlint) |
+| fzf | Interactive fuzzy history, file and directory selection. | Pinned mise tool plus Zsh key bindings. | [Repository](https://github.com/junegunn/fzf) |
+| zoxide | Frequent-directory navigation with `z` and interactive `zi`. | Pinned mise tool plus Zsh initialization. | [Repository](https://github.com/ajeetdsouza/zoxide) |
+| tmux | Persistent terminal sessions for SSH and long-running processes. | `cli_tools` role: `tmux`. | [Documentation](https://github.com/tmux/tmux/wiki) |
+| hyperfine | Command timing comparisons when explicitly requested. | `cli_tools` role: `hyperfine`. | [Repository](https://github.com/sharkdp/hyperfine) |
+| FFmpeg / ffprobe | Audio/video processing and machine-readable media metadata. | `cli_tools` role: `ffmpeg`. | [Documentation](https://ffmpeg.org/documentation.html) |
+| Playwright MCP | On-demand headless Chromium automation when explicitly requested. | Codex launcher with a digest-pinned multi-architecture Docker image. | [Repository](https://github.com/microsoft/playwright-mcp) |
 | Docker Engine, Compose, Buildx | Run containers and build images. | `docker` role: official Docker APT repository and packages. | [Documentation](https://docs.docker.com/) |
 | Codex CLI | Coding agent with managed configuration and rules. | `codex` role: pinned installer and dotfiles. | [Documentation](https://developers.openai.com/codex/cli) |
 
@@ -29,4 +40,10 @@ This inventory shows what each tool contributes and how Workstation provisions i
 - Ubuntu names the bat and fd binaries `batcat` and `fdfind`. The `cli_tools` role provides `bat` and `fd` symlinks in `~/.local/bin`.
 - The managed Git configuration uses `gh` as the credential helper for GitHub and Gist. Authentication state is not stored in this repository.
 - Docker group membership grants root-equivalent access to the Docker host.
-- Codex configuration includes a local Playwright MCP endpoint, but does not start that server; see the [Codex notes](codex.md).
+- Codex launches Playwright MCP over stdio through the managed Docker launcher; no separately started HTTP server is required. See the [Codex notes](codex.md).
+
+## Ownership and use
+
+APT manages Ubuntu CLI packages; mise pins shared runtimes and standalone tools. Project manifests and lockfiles own project dependencies and validation rules. Tool installation does not grant permission to run checks: the managed AGENTS.md requires an explicit request for tests, formatting, linting, builds, browser verification and benchmarks.
+
+Serena and Context7 remain optional research candidates, not installed defaults. Their value depends on actual symbol-navigation or library-documentation needs; the base setup keeps the existing CLI workflow and one browser MCP integration.

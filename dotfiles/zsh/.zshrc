@@ -60,6 +60,17 @@ if (( $+commands[mise] )); then
   eval "$(mise activate zsh)"
 fi
 
+# Fuzzy history (Ctrl+R), files (Ctrl+T), and directory selection (Alt+C).
+if (( $+commands[fzf] )); then
+  export FZF_DEFAULT_OPTS='--height=40% --layout=reverse --border'
+  eval "$(fzf --zsh)"
+fi
+
+# Frequent directories: z <name>; interactive selection: zi <name>.
+if (( $+commands[zoxide] )); then
+  eval "$(zoxide init zsh)"
+fi
+
 # Prompt
 if (( $+commands[starship] )); then
   eval "$(starship init zsh)"
