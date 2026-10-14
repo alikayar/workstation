@@ -2,7 +2,7 @@
 
 <p align="center">
   Reproducible Ubuntu development environment managed with Ansible.<br>
-  Configures an Ubuntu development VM across three areas: dotfiles, developer tools, and runtimes &amp; containers.
+  Configures Ubuntu 24.04 / 26.04 LTS on a VM, physical machine or WSL 2 across three areas: dotfiles, developer tools, and runtimes &amp; containers.
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 
 - **Reproducible:** workstation configuration lives in version control.
 - **Idempotent:** CI applies the playbook twice and requires `changed=0` on the second run.
-- **Isolated:** development tools run inside an Ubuntu VM.
+- **Portable:** the same Ubuntu roles work on VMs, physical machines and WSL 2; platform prerequisites are checked before installation.
 - **Modular:** Ansible roles can be applied independently with tags.
 
 ## Architecture
@@ -36,11 +36,11 @@ flowchart LR
 
 ## Quick start
 
-On an Ubuntu VM with internet access and `sudo`, run from the repository root:
+On Ubuntu 24.04 or 26.04 LTS with internet access and `sudo`, run from the repository root. For WSL 2, first review the systemd and Docker choices in the [setup guide](docs/getting-started.md#wsl-2).
 
 ```bash
 sudo apt-get update
-sudo apt-get install --yes ansible-core python3-debian
+sudo apt-get install --yes ansible-core python3-debian sudo
 cp ansible/host_vars/localhost.example.yml ansible/host_vars/localhost.yml
 ```
 
@@ -57,6 +57,10 @@ Apply the configuration:
 ```bash
 ansible-playbook ansible/site.yml --ask-become-pass
 ```
+
+Privilege escalation automatically prefers `/usr/bin/sudo.ws` when available and no become executable override was supplied. Older Ubuntu installations continue using their configured `sudo`. The same preflight runs for tagged and check-mode invocations. See the [sudo compatibility notes](docs/getting-started.md#sudo-compatibility) for details.
+
+CI applies the workstation twice on Ubuntu 24.04 and 26.04 and requires an unchanged second run. Separate disposable-container tests exercise password-based sudo, explicit overrides and the absence of the optional classic binary.
 
 ## Documentation
 
