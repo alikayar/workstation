@@ -50,6 +50,7 @@ foreach ($package in @(
     }
 }
 $pwshPath = (Get-Command pwsh.exe).Source
-& $pwshPath -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Set-Terminal.ps1')
+$starshipPath = (Get-Command starship.exe -CommandType Application -ErrorAction Stop).Source
+& $pwshPath -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Set-Terminal.ps1') -StarshipPath $starshipPath
 if ($LASTEXITCODE -ne 0) { throw 'Terminal configuration did not finish. Rerun after resolving the reported error.' }
 Write-Host 'VS Code, Remote - SSH and the Workstation terminal profiles are ready.'

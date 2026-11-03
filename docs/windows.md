@@ -45,6 +45,8 @@ The default VM is named `workstation`: Generation 2, 4 CPUs, 8 GiB fixed RAM and
 
 Installed applications are reused. The terminal configuration is a separate [JSON fragment](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions), so existing Terminal settings and PowerShell profiles remain intact. Dedicated Workstation profiles load their own startup script. Choose your default profile under **Settings → Startup**, and Dark under **Appearance** if you want matching window chrome. User overrides for font and opacity take precedence over fragment defaults. Font changes may require reopening Terminal or signing out and back in.
 
+Setup records the resolved Starship executable in `%LOCALAPPDATA%\Workstation\Terminal\runtime.json`. Both PowerShell profiles initialize Starship using that absolute path, so a new Terminal tab can refresh its environment without losing the prompt. A portable or Sandbox installation can use `host/windows/Set-Terminal.ps1 -StarshipPath C:\path\to\starship.exe` after placing the executable at its final location. If Starship is moved or reinstalled elsewhere, rerun terminal setup to refresh the recorded path. Opening a terminal does not install applications or change persistent PATH settings.
+
 ## Reruns and recovery
 
 | Existing state | What setup does |
