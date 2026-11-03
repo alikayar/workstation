@@ -12,9 +12,6 @@ if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
 if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
     throw 'Install or update App Installer from Microsoft Store, then reopen PowerShell.'
 }
-if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) {
-    throw 'Enable the Windows OpenSSH Client optional feature, then rerun this script. See docs/windows.md.'
-}
 
 $code = Get-Command code.cmd -ErrorAction SilentlyContinue
 if (-not $code) {
@@ -24,7 +21,7 @@ if (-not $code) {
     )
     $codePath = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $codePath) {
-        & winget.exe install --id Microsoft.VisualStudioCode --exact --source winget --scope user --silent --disable-interactivity
+        & winget.exe install --id Microsoft.VisualStudioCode --exact --source winget --scope user --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
         if ($LASTEXITCODE -ne 0) { throw "VS Code installation failed (exit $LASTEXITCODE)." }
         $codePath = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
     }
@@ -44,7 +41,7 @@ foreach ($package in @(
     @{ Id = 'Starship.Starship'; Command = 'starship.exe' }
 )) {
     if (-not (Get-Command $package.Command -ErrorAction SilentlyContinue)) {
-        & winget.exe install --id $package.Id --exact --source winget --silent --disable-interactivity
+        & winget.exe install --id $package.Id --exact --source winget --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
         if ($LASTEXITCODE -ne 0) { throw "Installation failed for $($package.Id) (exit $LASTEXITCODE)." }
         $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + $env:Path
         if (-not (Get-Command $package.Command -ErrorAction SilentlyContinue)) {

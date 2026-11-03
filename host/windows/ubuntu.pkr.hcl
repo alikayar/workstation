@@ -91,6 +91,11 @@ build {
     ]
   }
   provisioner "file" {
+    direction   = "download"
+    source      = "/etc/ssh/ssh_host_ed25519_key.pub"
+    destination = "${var.state_dir}/ssh-host-key.pub"
+  }
+  provisioner "file" {
     source      = "${var.payload_dir}/"
     destination = ".local/state/workstation-bootstrap/${var.bootstrap_id}"
   }

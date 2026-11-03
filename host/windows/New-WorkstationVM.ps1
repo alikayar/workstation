@@ -44,6 +44,20 @@ $publicKey = "$($Matches[1]) $($Matches[2])"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $state = Join-Path ([IO.Path]::GetFullPath($StateRoot)) $VMName
 $manifestPath = Join-Path $state 'installation.json'
+function Save-Connection([string]$Address) {
+    if (-not $Address) {
+        $deadline = (Get-Date).AddMinutes(2)
+        do {
+            $addresses = @(Get-VMNetworkAdapter -VMName $VMName | Select-Object -ExpandProperty IPAddresses | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' -and $_ -notlike '169.254.*' })
+            if ($addresses.Count -gt 1) { throw 'Multiple guest addresses reported. Inspect networking before connecting.' }
+            if ($addresses.Count -eq 1) { $Address = $addresses[0] }
+            if (-not $Address) { Start-Sleep -Seconds 3 }
+        } until ($Address -or (Get-Date) -ge $deadline)
+        if (-not $Address) { throw 'The VM is installed but has not reported an address. Rerun setup after it boots.' }
+    }
+    $json = @{ Address = $Address; User = $UserName } | ConvertTo-Json
+    [IO.File]::WriteAllText((Join-Path $state 'connection.json'), $json, [Text.UTF8Encoding]::new($false))
+}
 $utf8 = New-Object Text.UTF8Encoding($false)
 $vm = Get-VM -Name $VMName -ErrorAction SilentlyContinue
 if ($vm -and -not (Test-Path -LiteralPath $manifestPath)) {
@@ -134,6 +148,7 @@ try {
         # Verify guest ownership before uploading files or running provisioning.
         & ssh.exe @sshOptions $target "test `"`$(cat /etc/workstation-bootstrap-id)`" = '$id' || exit 20; if test -f ~/$remote/complete && test `"`$(cat ~/$remote/complete)`" = '$($installation.Revision)'; then exit 0; else exit 10; fi"
         if ($LASTEXITCODE -eq 0) {
+            Save-Connection $guestAddress
             Write-Host "VM '$VMName' is already ready at $guestAddress (user $UserName)."
             return
         }
@@ -146,6 +161,7 @@ try {
         }
         & ssh.exe @sshOptions $target "sh ~/$remote/provision-workstation.sh $id $($installation.Revision)"
         if ($LASTEXITCODE -ne 0) { throw 'Workstation provisioning did not finish. The VM and payload were preserved; rerun to resume.' }
+        Save-Connection $guestAddress
         Write-Host "VM '$VMName' is ready at $guestAddress (user $UserName)."
         return
     }
@@ -164,7 +180,7 @@ try {
     New-Item -ItemType Directory -Path $machines, $env:PACKER_CACHE_DIR -Force | Out-Null
     $packer = Get-Command packer.exe -ErrorAction SilentlyContinue
     if (-not $packer) {
-        & winget.exe install --id Hashicorp.Packer --exact --source winget --silent --disable-interactivity
+        & winget.exe install --id Hashicorp.Packer --exact --source winget --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
         if ($LASTEXITCODE -ne 0) { throw "Packer installation failed (exit $LASTEXITCODE)." }
         $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
         $packer = Get-Command packer.exe -ErrorAction Stop
@@ -202,6 +218,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'VM build stopped. Rerun this command to resume over SSH once Ubuntu is installed; otherwise inspect the installer in Hyper-V Manager.' }
     Start-VM -Name $VMName | Out-Null
     Remove-Item -LiteralPath (Join-Path $state 'output') -Recurse -Force
+    Save-Connection
     Write-Host "VM '$VMName' is installed and starting. See docs/windows.md for the SSH alias."
 } finally {
     $env:PACKER_CACHE_DIR = $previousCache
