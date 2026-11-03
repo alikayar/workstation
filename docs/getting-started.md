@@ -1,4 +1,6 @@
-# Getting started
+# Set up the Ubuntu environment
+
+Run the commands in this guide **inside the Ubuntu VM** as your development user, from the Workstation repository root. If you have not connected yet, start with the [host connection guide](host.md). Ansible uses a local inventory: launching it on a host computer does not provision a remote VM.
 
 Workstation targets Ubuntu 24.04 and 26.04 LTS on a VM, physical machine or WSL 2. The machine needs internet access and a non-root user with `sudo` access. Roles support x86_64 and aarch64 assets; the full installation CI currently runs on x86_64 for both LTS releases. Other Ubuntu releases at least as new as 24.04 pass platform validation but are not CI targets. Other distributions and older Ubuntu releases are rejected before package changes.
 
