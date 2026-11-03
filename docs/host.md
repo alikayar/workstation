@@ -11,7 +11,7 @@ The host is the computer where you use the desktop app, terminal and browser. Th
 | SSH destination | Guest IP, or a host port forwarded to the guest's SSH port | The VM's reachable DNS name or IP |
 | Availability | Depends on the host and VM staying awake | Depends on the remote machine and network remaining available |
 
-Use the VM software or provider you already operate. Workstation does not create VMs, install host applications or configure their networking. For WSL 2, follow the [WSL notes](getting-started.md#wsl-2); a working WSL terminal alone does not establish an SSH connection from the desktop app.
+For Windows 11 Pro, the [Windows setup guide](windows.md) covers VS Code, Remote - SSH and unattended Ubuntu creation on Hyper-V. That optional workflow uses an existing internal virtual switch and is awaiting its first Windows end-to-end run. On other hosts, use the VM software or provider you already operate. For WSL 2, follow the [WSL notes](getting-started.md#wsl-2); a working WSL terminal alone does not establish an SSH connection from the desktop app.
 
 ## Prepare access to Ubuntu
 
