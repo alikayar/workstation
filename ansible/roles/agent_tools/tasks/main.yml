@@ -1,0 +1,40 @@
+---
+- name: Ensure document converter directories exist
+  become: false
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ workstation_home }}/.local/share/workstation", mode: '0700'}
+    - {path: "{{ workstation_home }}/.local/bin", mode: '0755'}
+  when: workstation_markitdown_enabled | bool
+
+- name: Install the reviewed document converter in its own uv environment
+  become: false
+  ansible.builtin.command:
+    argv:
+      - "{{ mise_binary }}"
+      - exec
+      - --
+      - uv
+      - tool
+      - install
+      - --python
+      - python3
+      - --no-python-downloads
+      - "markitdown[pdf,docx,pptx,xlsx]=={{ workstation_markitdown_version }}"
+    chdir: "{{ workstation_home }}"
+    creates: "{{ workstation_markitdown_dir }}/bin/markitdown"
+  environment:
+    UV_TOOL_DIR: "{{ workstation_markitdown_dir }}/tools"
+    UV_TOOL_BIN_DIR: "{{ workstation_markitdown_dir }}/bin"
+  when: workstation_markitdown_enabled | bool
+
+- name: Install the optional document converter launcher
+  become: false
+  ansible.builtin.template:
+    src: markitdown.sh.j2
+    dest: "{{ workstation_home }}/.local/bin/workstation-markitdown"
+    mode: '0755'
+  when: workstation_markitdown_enabled | bool

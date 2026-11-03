@@ -8,6 +8,10 @@ codex_config_src: "{{ playbook_dir | dirname }}/dotfiles/codex/config.toml"
 codex_agents_src: "{{ playbook_dir | dirname }}/dotfiles/codex/AGENTS.md"
 codex_rules_src: "{{ playbook_dir | dirname }}/dotfiles/codex/rules/default.rules"
 
+codex_drawio_marketplace: https://github.com/jgraph/drawio-mcp.git
+codex_drawio_revision: 30c232a35a924e193cd419013b3deb35536ec79b
+codex_drawio_version: '1.2.6'
+
 # Multi-architecture manifest for the upstream Playwright MCP v0.0.83 image.
 codex_playwright_image: mcr.microsoft.com/playwright/mcp@sha256:690763cbb437ee7233f538a953bb5390bf03791eb5c965b471e59d17a6132fcb
 codex_playwright_output_dir: "{{ workstation_home }}/.local/share/playwright-mcp"

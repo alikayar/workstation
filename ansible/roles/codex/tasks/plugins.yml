@@ -1,0 +1,62 @@
+---
+- name: Register the pinned draw.io marketplace
+  become: false
+  ansible.builtin.command:
+    argv:
+      - "{{ codex_binary }}"
+      - plugin
+      - marketplace
+      - add
+      - "{{ codex_drawio_marketplace }}"
+      - --ref
+      - "{{ codex_drawio_revision }}"
+      - --json
+  register: codex_drawio_marketplace_result
+  # A failed add emits stderr, not JSON; preserve the CLI's source-conflict error.
+  changed_when: >-
+    codex_drawio_marketplace_result.rc == 0 and
+    not (codex_drawio_marketplace_result.stdout | from_json).alreadyAdded
+  when: not ansible_check_mode
+
+- name: Read the draw.io marketplace revision
+  become: false
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ (codex_drawio_marketplace_result.stdout | from_json).installedRoot }}"
+      - rev-parse
+      - HEAD
+  register: codex_drawio_installed_revision
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require the reviewed draw.io marketplace revision
+  ansible.builtin.assert:
+    that:
+      - codex_drawio_installed_revision.stdout == codex_drawio_revision
+    fail_msg: >-
+      The existing drawio marketplace uses a different revision. Review it before
+      replacing its registration; this role does not update an existing marketplace checkout.
+  when: not ansible_check_mode
+
+- name: Inspect installed draw.io plugins
+  become: false
+  ansible.builtin.command:
+    argv: ["{{ codex_binary }}", plugin, list, --marketplace, drawio, --json]
+  register: codex_drawio_plugins
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Install the reviewed draw.io plugin for the workstation user
+  become: false
+  ansible.builtin.command:
+    argv: ["{{ codex_binary }}", plugin, add, 'drawio@drawio', --json]
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - >-
+      (codex_drawio_plugins.stdout | from_json).installed
+      | selectattr('pluginId', 'equalto', 'drawio@drawio')
+      | selectattr('version', 'equalto', codex_drawio_version)
+      | list | length == 0

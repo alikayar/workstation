@@ -1,0 +1,3 @@
+#!/bin/sh
+# Keep the converter isolated from application Python dependencies.
+exec {{ (workstation_markitdown_dir ~ '/bin/markitdown') | quote }} "$@"

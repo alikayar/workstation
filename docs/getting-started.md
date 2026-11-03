@@ -47,6 +47,26 @@ After Docker adds the user to its group, start a new terminal or run:
 newgrp docker
 ```
 
+## Inspect the agent environment
+
+When a tool is missing or resolves to an unexpected version, run the relevant commands from the active project directory. Project configuration takes precedence over workstation defaults; these commands do not replace project checks.
+
+```sh
+command -v node python3 go bun uv codex
+mise which node
+MISE_AUTO_INSTALL=0 node --version
+```
+
+Replace `node` with the affected tool; Go uses `go version`. In a shell without mise shims on PATH, use `~/.local/bin/mise exec -- COMMAND` with `MISE_AUTO_INSTALL=0` to avoid installing a missing runtime during inspection.
+
+For local Docker access issues, explicitly target the VM's daemon:
+
+```sh
+docker --host unix:///var/run/docker.sock info --format '{{.ServerVersion}}'
+```
+
+This does not inspect rootless or remote Docker daemons. MCP configuration files also cannot establish which tools the current chat exposes; inspect the chat's available tools separately.
+
 ## Terminal still opens Bash
 
 The shell role sets the account's login shell to `/usr/bin/zsh`. Verify the account setting separately from the current process:
@@ -116,15 +136,26 @@ Run the repository's CI checks locally without applying the configuration:
 
 ```bash
 ansible-playbook ansible/site.yml --syntax-check
-ansible-lint ansible/site.yml tests/preflight.yml
-bash -n tests/preflight.sh
+ansible-lint ansible/site.yml
+actionlint
 ```
 
-The password-based regression test provisions disposable containers only. It uses a public test password and never modifies the host's accounts or sudo configuration:
+Actionlint 1.7.12 needs `.github/actionlint.yaml` to recognize the GitHub-hosted `ubuntu-26.04` label. The configuration adds only that known label; other runner-label checks remain enabled. Remove the compatibility entry when the pinned actionlint release supports it natively.
 
-```bash
-docker run --rm --mount type=bind,source="$PWD",target=/workstation,readonly ubuntu:24.04 bash /workstation/tests/preflight.sh
-docker run --rm --mount type=bind,source="$PWD",target=/workstation,readonly ubuntu:26.04 bash /workstation/tests/preflight.sh
+Full-role apply/idempotency checks run on disposable GitHub-hosted Ubuntu 24.04 and 26.04 runners. They do not establish a complete WSL or aarch64 installation result.
+
+## PHP and Composer through mise
+
+PHP is pinned in `dotfiles/mise/config.toml`. The `php` role installs Ubuntu build dependencies before the `mise` role compiles PHP through its [vfox backend](https://github.com/jdx/vfox-php). The backend enables common extensions including MySQL, mbstring, XML, ZIP and curl and installs Composer alongside PHP. The mise role then replaces the bundled Composer with the version and checksum pinned in `ansible/roles/mise/defaults/main.yml`. No application service is started.
+
+Apply the PHP prerequisites and managed runtime configuration from the Workstation root:
+
+```sh
+ansible-playbook ansible/site.yml --tags php --ask-become-pass
 ```
 
-Full-role apply/idempotency checks run on disposable GitHub-hosted Ubuntu 24.04 and 26.04 runners. Container regression checks cover the actual preflight, password authentication, check mode with role tags, variable/environment overrides and fallback when `/usr/bin/sudo.ws` is missing. They do not establish a complete WSL or aarch64 installation result.
+The tag includes the mise role and therefore installs all missing configured tools, not only PHP. Enter the sudo password in your terminal. PHP's first installation compiles from source and takes longer than downloading a runtime binary.
+
+After PHP and pinned Composer are installed, the old Workstation launcher at `~/.local/bin/composer` is removed so the mise shim owns Composer resolution. Existing Ubuntu PHP packages are left installed for applications that explicitly use `/usr/bin/php`; their extensions and `/etc/php` settings do not configure mise's PHP. Project dependencies remain local: run `composer install` in the project's Composer directory.
+
+The PHP backend sets `COMPOSER_HOME` inside the selected PHP installation. Existing global Composer packages and settings are not automatically migrated; project lockfiles remain authoritative.

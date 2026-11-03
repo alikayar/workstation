@@ -82,3 +82,35 @@
     - not ansible_check_mode
     - mise_tools_check.rc == 1
   changed_when: true
+
+- name: Locate the managed PHP installation
+  become: false
+  ansible.builtin.command: "{{ mise_binary }} where php"
+  environment:
+    MISE_CONFIG_FILE: "{{ mise_config_dest }}"
+  register: mise_php_install
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Install the checksum-pinned Composer beside managed PHP
+  become: false
+  ansible.builtin.get_url:
+    url: "https://getcomposer.org/download/{{ mise_composer_version }}/composer.phar"
+    dest: "{{ mise_php_install.stdout | trim }}/bin/composer"
+    checksum: "sha256:{{ mise_composer_sha256 }}"
+    mode: '0755'
+  when: not ansible_check_mode
+
+- name: Refresh runtime shims for noninteractive commands
+  become: false
+  ansible.builtin.command: "{{ mise_binary }} reshim"
+  # Rebuild derived command links; tool/config changes are reported above.
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Remove the former standalone Composer launcher
+  become: false
+  ansible.builtin.file:
+    path: "{{ workstation_home }}/.local/bin/composer"
+    state: absent
+  when: not ansible_check_mode

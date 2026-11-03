@@ -1,3 +1,8 @@
+# Command safeguards complement AGENTS.md; they do not grant authorization.
+# Prefix matching is not exhaustive: options, absolute executable paths and
+# wrappers may not match. Never change command spelling to evade a decision.
+# Keep model choices in config.toml and workflow preferences in AGENTS.md.
+
 # Git history mutations.
 prefix_rule(
     pattern = [
@@ -12,7 +17,7 @@ prefix_rule(
         ],
     ],
     decision = "prompt",
-    justification = "Git history mutation requires explicit user approval.",
+    justification = "Git history mutation requires authorization for the intended action; consult the conversation.",
     match = [
         "git commit -m message",
         "git commit --amend",
@@ -63,7 +68,7 @@ prefix_rule(
         ],
     ],
     decision = "prompt",
-    justification = "Remote publication or integration requires explicit user approval.",
+    justification = "Remote publication or integration requires authorization for the intended action; consult the conversation.",
     match = [
         "git push origin main",
         "git push --force-with-lease",
@@ -94,7 +99,7 @@ prefix_rule(
         ],
     ],
     decision = "prompt",
-    justification = "Branch ref mutation requires explicit user approval.",
+    justification = "Branch ref mutation requires authorization for the intended action; consult the conversation.",
     match = [
         "git branch -d feature",
         "git branch -D feature",
@@ -114,7 +119,7 @@ prefix_rule(
 prefix_rule(
     pattern = ["git", "tag"],
     decision = "prompt",
-    justification = "Git tag operations require explicit user approval.",
+    justification = "Git tag operations require authorization for the intended action; consult the conversation.",
     match = [
         "git tag",
         "git tag v1.0.0",
@@ -136,7 +141,7 @@ prefix_rule(
         ],
     ],
     decision = "prompt",
-    justification = "Low-level Git state manipulation requires explicit user approval.",
+    justification = "Low-level Git state manipulation requires authorization for the intended action; consult the conversation.",
     match = [
         "git update-ref refs/heads/main abc123",
         "git update-index --assume-unchanged file.txt",
@@ -158,7 +163,7 @@ prefix_rule(
         ],
     ],
     decision = "prompt",
-    justification = "Worktree removal or relocation requires explicit user approval.",
+    justification = "Worktree removal or relocation requires authorization for the intended action; consult the conversation.",
     match = [
         "git worktree remove ../feature",
         "git worktree move ../old ../new",
@@ -202,7 +207,7 @@ prefix_rule(
 prefix_rule(
     pattern = ["gh", "pr", "merge"],
     decision = "prompt",
-    justification = "Pull request merge requires explicit user approval.",
+    justification = "Pull request merge requires authorization for the intended action; consult the conversation.",
     match = [
         "gh pr merge 123",
         "gh pr merge 123 --squash",

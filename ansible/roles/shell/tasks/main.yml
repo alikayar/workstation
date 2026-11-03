@@ -83,6 +83,16 @@
     path: "/tmp/starship-{{ shell_starship_version }}-{{ shell_starship_arch }}.tar.gz"
     state: absent
 
+- name: Install the noninteractive Zsh environment
+  become: false
+  ansible.builtin.copy:
+    src: "{{ playbook_dir | dirname }}/dotfiles/zsh/.zshenv"
+    dest: "{{ workstation_home }}/.zshenv"
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user }}"
+    mode: '0644'
+    backup: true
+
 - name: Install the Zsh configuration
   become: false
   ansible.builtin.copy:

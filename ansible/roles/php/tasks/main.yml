@@ -1,0 +1,9 @@
+---
+- name: Install PHP build dependencies for mise
+  become: true
+  ansible.builtin.apt:
+    name: "{{ php_build_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false

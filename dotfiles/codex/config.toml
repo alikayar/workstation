@@ -1,4 +1,4 @@
-model = "gpt-5.6-sol"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 model_verbosity = "low"
 web_search = "live"
@@ -15,6 +15,56 @@ enabled = true
 
 [plugins."sites@openai-bundled"]
 enabled = true
+
+[plugins."drawio@drawio"]
+enabled = true
+
+[mcp_servers.drawio]
+command = "npx"
+args = ["-y", "@drawio/mcp@1.10.1"]
+enabled = true
+startup_timeout_sec = 120
+required = false
+
+# Hosted, documentation-only MCP; no extra runtime, process or secret in git.
+# Unauthenticated requests may have lower rate limits.
+[mcp_servers.context7]
+url = "https://mcp.context7.com/mcp"
+required = false
+startup_timeout_sec = 20
+
+# Semantic navigation, installed in an isolated uvx environment.
+[mcp_servers.serena]
+command = "uvx"
+args = ["--from", "serena-agent==2.1.0", "serena", "start-mcp-server", "--project-from-cwd", "--context=codex"]
+startup_timeout_sec = 120
+required = false
+
+# Opt-in performance traces. Requires Chrome in the Ubuntu environment.
+[mcp_servers.chrome_devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@1.12.0", "--headless", "--isolated"]
+enabled = false
+startup_timeout_sec = 120
+required = false
+
+# Opt-in Grafana inspection. Credentials are inherited, never committed.
+[mcp_servers.grafana]
+command = "uvx"
+args = ["--from", "mcp-grafana==2.1.1", "mcp-grafana", "--disable-write"]
+env_vars = ["GRAFANA_URL", "GRAFANA_SERVICE_ACCOUNT_TOKEN"]
+enabled = false
+startup_timeout_sec = 120
+required = false
+
+# Opt-in, read-only PostgreSQL inspection.
+[mcp_servers.postgres]
+command = "uvx"
+args = ["--from", "postgres-mcp==0.3.0", "postgres-mcp", "--access-mode=restricted"]
+env_vars = ["DATABASE_URI"]
+enabled = false
+startup_timeout_sec = 120
+required = false
 
 [mcp_servers.playwright]
 command = "sh"

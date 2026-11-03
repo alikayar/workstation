@@ -16,9 +16,13 @@
       tags: [git]
     - role: codex
       tags: [codex]
+    - role: php
+      tags: [php, mise, runtimes]
     - role: mise
-      tags: [mise, runtimes]
+      tags: [mise, php, runtimes]
     - role: cli_tools
       tags: [cli, cli_tools]
     - role: docker
       tags: [docker, containers]
+    - role: agent_tools
+      tags: [agent_tools]

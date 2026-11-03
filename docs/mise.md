@@ -1,6 +1,6 @@
 # Mise
 
-Mise manages language runtimes and keeps their versions in one project-owned configuration instead of maintaining separate version managers.
+Mise manages Node.js, Python, Go, Bun and PHP and keeps their versions in one project-owned configuration instead of maintaining separate version managers. The `php` role installs build dependencies before mise compiles PHP; the mise role installs checksum-pinned Composer alongside it.
 
 - **Official docs:** https://mise.jdx.dev/
 - **Source repository:** https://github.com/jdx/mise
@@ -11,12 +11,12 @@ Mise manages language runtimes and keeps their versions in one project-owned con
 
 ## Managed runtimes
 
-The [mise configuration](../dotfiles/mise/config.toml) pins the Node.js, Python, Go and Bun versions installed by the `mise` role, together with uv, Ruff, ast-grep, actionlint, fzf and zoxide.
+The [mise configuration](../dotfiles/mise/config.toml) pins the Node.js, Python, Go, Bun and PHP versions installed by the `mise` role, together with uv, Ruff, ast-grep, actionlint, fzf and zoxide.
 
 ## Why
 
-- One mechanism manages all configured language runtimes.
-- Runtime versions are explicit and reproducible.
+- One mechanism manages the language runtimes listed in the mise configuration.
+- Runtime versions are explicit; PHP is compiled against the installed Ubuntu libraries.
 - The same mechanism can activate tools per project when a repository defines its own `mise.toml`.
 - Zsh activation is managed in `.zshrc`; Starship reads the active toolchain.
 

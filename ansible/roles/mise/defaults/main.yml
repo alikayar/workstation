@@ -7,3 +7,7 @@ mise_binary: "{{ workstation_home }}/.local/bin/mise"
 mise_config_dir: "{{ workstation_home }}/.config/mise"
 mise_config_src: "{{ playbook_dir | dirname }}/dotfiles/mise/config.toml"
 mise_config_dest: "{{ mise_config_dir }}/config.toml"
+
+# Keep Composer pinned even though the PHP backend also bootstraps it.
+mise_composer_version: "2.11.0"
+mise_composer_sha256: "9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602599b"

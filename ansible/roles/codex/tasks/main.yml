@@ -57,7 +57,15 @@
 - name: Install the Codex configuration
   become: false
   ansible.builtin.copy:
-    src: "{{ codex_config_src }}"
+    # Codex persists marketplace identity here; copying only the base config
+    # erases it and makes the next plugin add report a conflicting source.
+    content: |
+      {{ lookup('file', codex_config_src) }}
+
+      [marketplaces.drawio]
+      source_type = "git"
+      source = {{ codex_drawio_marketplace | to_json }}
+      ref = {{ codex_drawio_revision | to_json }}
     dest: "{{ codex_config_dir }}/config.toml"
     owner: "{{ workstation_user }}"
     group: "{{ workstation_user }}"
@@ -98,3 +106,7 @@
     owner: "{{ workstation_user }}"
     group: "{{ workstation_user }}"
     mode: '0755'
+
+- name: Configure user-level Codex plugins
+  ansible.builtin.import_tasks: plugins.yml
+  tags: [codex_plugins]

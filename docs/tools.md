@@ -12,7 +12,9 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | Git | Version control with managed identity and defaults. | `git` role: Ubuntu package and `.gitconfig`. | [Documentation](https://git-scm.com/doc) |
 | Git Delta (`delta`) | Readable Git diffs. | `cli_tools` role: `git-delta`. | [Documentation](https://dandavison.github.io/delta/) |
 | GitHub CLI (`gh`) | GitHub commands and Git credential helper. | `cli_tools` role: `gh`. | [Documentation](https://cli.github.com/manual/) |
-| mise | Manage pinned Node.js, Python, Go, and Bun runtimes. | `mise` role: installer and [runtime configuration](../dotfiles/mise/config.toml); `shell` role: Zsh activation. | [Documentation](https://mise.jdx.dev/) |
+| mise | Manage pinned Node.js, Python, Go, Bun, and PHP runtimes. | `mise` role: installer and [runtime configuration](../dotfiles/mise/config.toml); `shell` role: Zsh activation. | [Documentation](https://mise.jdx.dev/) |
+| PHP CLI | Run PHP applications directly in the VM. | `php` role: build dependencies; `mise` role: pinned PHP source build with common extensions. No web service is started. | [Documentation](https://www.php.net/manual/en/features.commandline.php) |
+| Composer | Install project-locked PHP dependencies. | `mise` role: version/checksum-pinned PHAR beside managed PHP. | [Documentation](https://getcomposer.org/doc/) |
 | bat | Read source files with syntax highlighting. | `cli_tools` role: `bat`. | [Repository](https://github.com/sharkdp/bat#usage) |
 | btop | Monitor VM resource usage. | `cli_tools` role: `btop`. | [Repository](https://github.com/aristocratos/btop#documentation) |
 | eza | Git-aware file listings and shell aliases. | `cli_tools` role: `eza`; `shell` role: aliases. | [Repository](https://github.com/eza-community/eza#command-line-options) |
@@ -31,7 +33,13 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | hyperfine | Command timing comparisons when explicitly requested. | `cli_tools` role: `hyperfine`. | [Repository](https://github.com/sharkdp/hyperfine) |
 | FFmpeg / ffprobe | Audio/video processing and machine-readable media metadata. | `cli_tools` role: `ffmpeg`. | [Documentation](https://ffmpeg.org/documentation.html) |
 | Playwright MCP | On-demand headless Chromium automation when explicitly requested. | Codex launcher with a digest-pinned multi-architecture Docker image. | [Repository](https://github.com/microsoft/playwright-mcp) |
+| Context7 MCP | Version-specific library and framework documentation when applicable. | Codex's remote Streamable HTTP MCP configuration, no local package. | [Repository](https://github.com/upstash/context7) |
+| Serena MCP | Symbol/reference navigation for codebases. | Pinned `uvx` package; enabled. | [Repository](https://github.com/oraios/serena) |
+| Chrome DevTools MCP | Chrome tracing, network and memory analysis. | Pinned `npx` package; disabled until needed. | [Repository](https://github.com/ChromeDevTools/chrome-devtools-mcp) |
+| Grafana MCP | Read-only monitoring, log and metric analysis. | Pinned `uvx` package; disabled until configured. | [Repository](https://github.com/grafana/mcp-grafana) |
+| PostgreSQL MCP | Restricted SQL and schema analysis. | Pinned `uvx` package; disabled until configured. | [Repository](https://github.com/crystaldba/postgres-mcp) |
 | Docker Engine, Compose, Buildx | Run containers and build images. | `docker` role: official Docker APT repository and packages. | [Documentation](https://docs.docker.com/) |
+| MarkItDown | Local PDF/Office text extraction. | Optional isolated uv environment; reviewed package version. | [Usage](agent-environment.md#document-conversion) |
 | Codex CLI | Coding agent with managed configuration and rules. | `codex` role: pinned installer and dotfiles. | [Documentation](https://developers.openai.com/codex/cli) |
 
 ## Implementation notes
@@ -44,6 +52,8 @@ This inventory shows what each tool contributes and how Workstation provisions i
 
 ## Ownership and use
 
+Task-specific skills are managed independently; Workstation does not install or link them.
+
 APT manages Ubuntu CLI packages; mise pins shared runtimes and standalone tools. Project manifests and lockfiles own project dependencies and validation rules. Tool installation does not grant permission to run checks: the managed AGENTS.md requires an explicit request for tests, formatting, linting, builds, browser verification and benchmarks.
 
-Serena and Context7 remain optional research candidates, not installed defaults. Their value depends on actual symbol-navigation or library-documentation needs; the base setup keeps the existing CLI workflow and one browser MCP integration.
+Serena and Context7 are enabled. Chrome DevTools, Grafana and PostgreSQL require explicit session activation; see [MCP guide](mcp.md).

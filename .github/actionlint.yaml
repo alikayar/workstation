@@ -1,0 +1,6 @@
+# actionlint 1.7.12 predates the GitHub-hosted Ubuntu 26.04 runner.
+# This configuration key extends known labels; it does not change runner hosting.
+# Remove once the pinned release includes https://github.com/rhysd/actionlint/pull/743.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

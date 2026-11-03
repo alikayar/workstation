@@ -1,0 +1,5 @@
+---
+# Document conversion is optional.
+workstation_markitdown_enabled: false
+workstation_markitdown_version: '0.1.9'
+workstation_markitdown_dir: "{{ workstation_home }}/.local/share/workstation/markitdown-{{ workstation_markitdown_version }}"
