@@ -44,6 +44,7 @@ On the first SSH connection, compare its host-key fingerprint with the value pri
 
 | Location | Responsibility |
 | --- | --- |
+| `host/windows/hyperv/windows-pro/` | Standalone Windows Pro VM command, media download, unattended setup and answer template |
 | `host/windows/Install-Host.ps1` | Install host applications and invoke terminal setup |
 | `host/windows/terminal/` | Terminal profiles, startup script and Slate Glass palette |
 | `host/windows/hyperv/` | VM bootstrap, resource inputs and Packer template |
@@ -51,6 +52,54 @@ On the first SSH connection, compare its host-key fingerprint with the value pri
 | `host/windows/hyperv/guest/` | SSH account finalization and Ubuntu bootstrap payload scripts |
 
 Saved payloads keep their existing filenames and state directories. Recovery reads source files from the recorded Git revision and supports both the current and previous flat source layout.
+
+## Windows 11 Pro test VM
+
+`host/windows/hyperv/windows-pro/New-WindowsProVM.ps1` creates a separate Windows VM for testing the host tooling. It is independent of the Ubuntu `setup.ps1` and `wvm` lifecycle. Run it in an **administrator, 64-bit PowerShell** window on Windows 11 Pro x64 with Hyper-V already enabled. Windows PowerShell 5.1 and PowerShell 7 (including 7.6) use the same inbox Windows PowerShell 5.1 worker; PowerShell 7 does not load Hyper-V through compatibility-session proxies. No PowerShell installation, execution-policy change or automatic elevation is performed.
+
+Installation media is pinned in `host/windows/hyperv/windows-pro/Windows-Media.ps1` to **Windows 11 25H2, build 26200.6584, x64, English (United States), multi-edition including Pro**. The SHA256 is `D141F6030FED50F75E2B03E1EB2E53646C4B21E5386047CB860AF5223F102A32`, originally published in the English 64-bit row on [Microsoft's download page](https://www.microsoft.com/ja-jp/software-download/windows11?msockid=2d54d98863066df52f04cf0962136c58). The current download page may list a newer release; updating it never changes this repository's pin. The fixed Microsoft CDN URL was published in this [Microsoft Q&A answer](https://learn.microsoft.com/en-us/answers/questions/6020251/i-need-a-direct-download-link-for-the-windows-11-2) and checked on 2026-11-04.
+
+The command downloads directly from that pinned HTTPS URL into `%ProgramData%\Workstation\Media`. It does not call the temporary-link API, ask for a URL, change regions, or use third-party mirrors. Redirects are refused. If Microsoft removes the file or the network fails, it stops with the download error; there is no silent upgrade or unverified fallback. A verified existing cache is reused; a mismatching cache is preserved and refused. Downloads use a temporary `.partial` file which is removed on handled failure and published as an ISO only after verification. A forcibly terminated process can leave a partial file; it is never treated as a completed ISO.
+
+An ISO is not an Authenticode-signed executable. The command verifies the entire ISO against Microsoft's pinned SHA256, then checks the **Microsoft Authenticode signature on the ISO's `setup.exe`**, plus the Pro edition, x64 architecture and exact image build. It never executes Windows Setup on the host. Enterprise Evaluation and Pro N media are rejected. To supply a previously downloaded copy, use `-IsoPath 'D:\ISO\Windows11-x64.iso'`; it must match the same pin. There is no caller-provided checksum override. Changing release requires reviewing and updating the media pin in the repository.
+
+```powershell
+.\host\windows\hyperv\windows-pro\New-WindowsProVM.ps1 `
+    -VMRoot 'D:\VMs' `
+    -NestedVirtualization -OpenConsole
+```
+
+Omit `-VMName`, `-CPUs`, `-MemoryGB` or `-DiskGB` to answer interactive questions for those values. Each question shows its default in brackets; Enter accepts it, and invalid answers repeat the question. Explicit parameters skip their questions. New VM defaults are `workstation-windows-pro`, 4 logical CPUs (capped at the host count), 8 GiB fixed RAM and a 120 GiB dynamically growing disk. When resuming an owned VM, resource questions show its saved sizes; changing them is refused rather than resizing the VM. The existing Internal `Default Switch` is used by default. `VMRoot` defaults to `%ProgramData%\Workstation\WindowsVMs`. The host must retain at least 2 GiB available RAM after VM allocation, and a new disk requires at least 64 GiB physical free space. The script does not stop other VMs to free memory. `-NestedVirtualization` exposes CPU virtualization extensions so Hyper-V can later be enabled inside Windows; it does not install the guest role. Networking for nested guests must be configured inside that guest, for example with its Default Switch/NAT. The script does not enable MAC spoofing or modify host switches/firewall rules.
+
+New VMs also ask for a local user name `[dev]` (or accept `-UserName`) and a password twice through `Read-Host -AsSecureString`. Blank passwords and mismatches are rejected; passwords have no default and are never accepted as command-line parameters. The password prompt runs inside the 5.1 worker, so no secret is serialized into the PowerShell 7 delegation command. The account belongs to local Administrators for development and PowerShell Direct; automatic logon is not enabled.
+
+`host/windows/hyperv/windows-pro/Autounattend.xml` selects **Windows 11 Pro**, English (`en-US`) UI, Turkish (`tr-TR`) regional formats/system locale, **Turkish Q** (`041f:0000041f`) and `Turkey Standard Time`. The template accepts the Windows licence terms and uses the public default Pro installation key to select the edition; that key does not activate Windows or provide a licence. Windows Setup creates EFI, MSR, Windows and approximately 1 GiB recovery partitions on the one new virtual disk. `WillWipeDisk` is false: an existing partitioned disk is not automatically wiped if installation is restarted from DVD.
+
+The Microsoft ISO remains unchanged. The command reuses the existing seed-ISO writer to attach a second, nonbootable ISO with the answer file. In the console, **press a key once** if prompted to boot from DVD. Windows Setup then reads the answer file automatically. Do not press a key on subsequent reboots. `-OpenConsole` opens VMConnect; without it you must open the VM console yourself for that first keypress. Previously created schema-1 manual VMs keep their manual installation flow and are never converted or reinstalled automatically; choose a new VM name for unattended installation.
+
+The rendered answer contains the supplied password in recoverable form, as required by Setup. Only its placeholder template is tracked. Host answer files and media are created under `<VMRoot>\<VMName>\setup-secrets` with inheritance disabled and access limited to the creating Windows account, SYSTEM and Administrators. Source XML is removed immediately after ISO creation; the password is not stored in `windows-vm.json`. The command waits up to 45 minutes, using authenticated **PowerShell Direct** rather than exposing a guest SSH/WinRM network listener. It checks the VM ID, ownership token, single disk, guest setup token and Windows setup-completion flags before setting the user's Turkey location (GeoID 235), deleting guest cached answer files, detaching both DVDs and removing host answer media. Setup verification is saved before host cleanup so interrupted cleanup can safely repeat. Deletion is ordinary file removal, not a forensic secure erase.
+
+Keep the PowerShell window open through completion. Ctrl+C or a timeout retains the VM and its protected answer ISO; repeat the same command/name and supply the original password to continue verification, without regenerating installation media or reformatting the disk. Missing/tampered media, an incomplete secret directory or a failure between ISO publication and recording its hash stops for inspection. A pending installation must not be checkpointed or have disks replaced while verification runs. No new password is requested after verified setup cleanup is complete. See [Microsoft's answer-file search order](https://learn.microsoft.com/windows-hardware/manufacture/desktop/windows-setup-automation-overview) and [default input profiles](https://learn.microsoft.com/windows-hardware/manufacture/desktop/default-input-locales-for-windows-language-packs).
+
+The VM uses Generation 2, Microsoft Windows Secure Boot and a local vTPM. Automatic checkpoints and host auto-start are disabled. Guest Service Interface file-copy integration is disabled. Use a basic VMConnect session for untrusted workloads: enhanced sessions can redirect clipboard, drives and devices. An Internal switch alone is **not** the network-isolation policy used by the Ubuntu temporary VM commands. See Microsoft's [Windows 11 Hyper-V example](https://techcommunity.microsoft.com/blog/itopstalkblog/how-to-run-a-windows-11-vm-on-hyper-v/3713948) and [nested virtualization requirements](https://learn.microsoft.com/windows-server/virtualization/hyper-v/enable-nested-virtualization).
+
+Repeat the same command with the same arguments to start or resume the recorded VM. Settings and ownership are saved atomically in `<VMRoot>\<VMName>\windows-vm.json`; concurrent invocations are refused. A running completed VM is left running, and a completed saved VM is restored without resetting its TPM or firmware. An incomplete VM must be Off before configuration can resume. Checkpoint disk chains are accepted only when they remain inside the VM directory and descend from its recorded base disk. Different settings, missing/replaced VM identities, unowned names/directories and linked paths stop with existing files preserved. A failure in the narrow interval between VM creation and ownership tagging requires manual inspection; it never triggers adoption, deletion or rebuilding. This command has no deletion operation.
+
+Use the adjacent `Remove-WindowsProVM.ps1` for a create/delete test cycle or to clear orphaned files after manually removing a VM registration. Run from the same administrator account that created it, using the same `VMRoot` and an explicit VM name:
+
+```powershell
+# Preview; -Force permits considering a running/saved VM, without changing it.
+.\host\windows\hyperv\windows-pro\Remove-WindowsProVM.ps1 `
+    -VMRoot 'D:\VMs' -VMName 'workstation-windows-pro' -Force -WhatIf
+
+# Delete this VM and all its files; asks for confirmation.
+.\host\windows\hyperv\windows-pro\Remove-WindowsProVM.ps1 `
+    -VMRoot 'D:\VMs' -VMName 'workstation-windows-pro' -Force
+```
+
+The command removes the owned VM registration, checkpoints, virtual disks, saved state and setup secrets under its recorded directory. The shared verified Windows ISO cache is retained. Without `-Force`, the VM must already be Off. `-Force` permits an immediate power-off and loss of unsaved guest state; it never bypasses ownership, dependency or active-operation checks. Use `-Confirm:$false` only when intentionally skipping the deletion confirmation. While the creation command is waiting for installation, finish it or cancel that command with Ctrl+C first; both commands use the same per-name lock. Cancelling the command retains the VM for inspection or deliberate deletion.
+
+The marker's owner, VM ID, name, directory and token must match. A replaced VM, linked path, disk/configuration outside the owned directory, or another VM/checkpoint referencing files inside it causes refusal. Missing ownership records never authorize deleting an existing directory. Interrupted deletion keeps `.<VMName>.delete.json` beside the VM directory, so rerunning can finish even if its inner marker is already gone. A stale journal cannot delete a replacement generation; creation refuses that name until deletion finishes. Repeating removal when both VM and files are absent is harmless. A corrupt ownership record/journal requires inspection rather than guessing which files to delete.
 
 ## Temporary VM commands
 
