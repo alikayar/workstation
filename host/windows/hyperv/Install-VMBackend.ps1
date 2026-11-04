@@ -3,7 +3,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{32}$')][string]$StageId,
-    [Parameter(Mandatory)][ValidatePattern('^S-1-5-21-[0-9-]+$')][string]$ExpectedSid
+    [Parameter(Mandatory)][ValidatePattern('^S-1-5-21-[0-9-]+$')][string]$ExpectedSid,
+    [ValidatePattern('^[a-f0-9]{32}$')][string]$ValidationId
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -53,6 +54,25 @@ $userPrograms = Join-Path $programs $sid
 $userData = Join-Path $data $sid
 Protect-BackendDirectory $userPrograms
 Protect-BackendDirectory $userData
+if ($ValidationId) {
+    # A privileged installer chooses this fixed-format test namespace. Runtime
+    # requests cannot select arbitrary state paths or modify another scope.
+    Protect-BackendDirectory (Join-Path $userPrograms 'Validation')
+    Protect-BackendDirectory (Join-Path $data 'Validation') -Shared
+    $userPrograms = Join-Path $userPrograms ('Validation\' + $ValidationId)
+    $userData = Join-Path $data ('Validation\' + $ValidationId)
+    Protect-BackendDirectory $userPrograms
+    $scopeRecord = Join-Path $userData 'validation-scope.json'
+    if (Test-Path -LiteralPath $userData) {
+        if (-not (Test-Path -LiteralPath $scopeRecord) -or (Read-VMJson $scopeRecord).OwnerSid -cne $sid) { throw 'Existing validation namespace is not owned by this account. It was preserved.' }
+    }
+    Protect-BackendDirectory $userData
+    Write-VMJson $scopeRecord @{ OwnerSid = $sid; Id = $ValidationId }
+    foreach ($ancestor in @((Join-Path $data $sid), (Join-Path $data 'Validation'))) {
+        & "$env:SystemRoot\System32\icacls.exe" $ancestor /grant '*S-1-5-83-0:RX' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Could not allow Hyper-V validation directory traversal.' }
+    }
+}
 & "$env:SystemRoot\System32\icacls.exe" $data /grant '*S-1-5-83-0:RX' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Could not allow Hyper-V state traversal.' }
 & "$env:SystemRoot\System32\icacls.exe" $userData /grant '*S-1-5-83-0:(OI)(CI)RX' | Out-Null
@@ -63,6 +83,13 @@ $destination = Join-Path $packages $StageId
 if (Test-Path -LiteralPath $destination) { throw 'Package identity already exists; rerun the installer to create a fresh package.' }
 Protect-BackendDirectory $destination
 Copy-Item -LiteralPath (Join-Path $stage 'hyperv'), (Join-Path $stage 'payload'), (Join-Path $stage 'settings.json'), (Join-Path $stage 'setup.json') -Destination $destination -Recurse
+$settingsPath = Join-Path $destination 'settings.json'
+$settings = Read-VMJson $settingsPath
+if ($settings.PSObject.Properties.Name -contains 'ValidationId') { throw 'Validation scope must be chosen by the privileged installer, not by a staged settings file.' }
+if ($ValidationId) {
+    $settings | Add-Member -NotePropertyName ValidationId -NotePropertyValue $ValidationId
+    Write-VMJson $settingsPath $settings
+}
 $answers = Read-VMJson (Join-Path $destination 'setup.json')
 $sshDirectory = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.ssh'
 $null = Assert-VMPath $answers.PublicKeyPath $sshDirectory
@@ -88,7 +115,7 @@ foreach ($name in @('Instances', 'Images', 'Results', 'Locks')) {
 $launcher = Join-Path $userPrograms 'Invoke-VM.ps1'
 $temporary = Join-Path $userPrograms ($StageId + '.launcher.tmp')
 Copy-Item -LiteralPath (Join-Path $destination 'hyperv\commands\Invoke-InstalledVM.ps1') -Destination $temporary
-if (Test-Path -LiteralPath $launcher) { [IO.File]::Replace($temporary, $launcher, $null) }
+if (Test-Path -LiteralPath $launcher) { [IO.File]::Replace($temporary, $launcher, [NullString]::Value) }
 else { [IO.File]::Move($temporary, $launcher) }
 & "$env:SystemRoot\System32\icacls.exe" $launcher /setowner '*S-1-5-32-544' /Q | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Could not protect launcher ownership.' }

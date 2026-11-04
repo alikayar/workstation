@@ -21,7 +21,7 @@ function Save-SetupInputs([object]$Answers) {
     $temporary = Join-Path $state ('setup-' + [Guid]::NewGuid().ToString('N') + '.tmp')
     try {
         [IO.File]::WriteAllText($temporary, ($Answers | ConvertTo-Json -Depth 4), $utf8)
-        if (Test-Path -LiteralPath $inputsPath) { [IO.File]::Replace($temporary, $inputsPath, $null) }
+        if (Test-Path -LiteralPath $inputsPath) { [IO.File]::Replace($temporary, $inputsPath, [NullString]::Value) }
         else { [IO.File]::Move($temporary, $inputsPath) }
     } finally {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }

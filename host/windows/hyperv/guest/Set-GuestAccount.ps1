@@ -14,7 +14,10 @@ if ($UserName -eq 'root') { throw 'Use the development account.' }
 $ssh = Join-Path ([Environment]::SystemDirectory) 'OpenSSH\ssh.exe'
 $scp = Join-Path ([Environment]::SystemDirectory) 'OpenSSH\scp.exe'
 $options = @('-F', 'NUL', '-o', 'IdentityAgent=none', '-o', 'ForwardAgent=no', '-o', 'PermitLocalCommand=no', '-o', 'ClearAllForwardings=yes', '-i', $IdentityFile, '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=ask', '-o', 'ConnectTimeout=15')
-if ($KnownHostsFile) { $options += @('-o', ('UserKnownHostsFile="' + [IO.Path]::GetFullPath($KnownHostsFile).Replace('\', '/') + '"')) }
+if ($KnownHostsFile) {
+    $options[$options.IndexOf('StrictHostKeyChecking=ask')] = 'StrictHostKeyChecking=yes'
+    $options += @('-o', ('UserKnownHostsFile="' + [IO.Path]::GetFullPath($KnownHostsFile).Replace('\', '/') + '"'))
+}
 $target = "$UserName@$Address"
 if ($WaitForCloudInit) {
     & $ssh @options $target '/usr/bin/timeout 180 cloud-init status --wait >/dev/null'

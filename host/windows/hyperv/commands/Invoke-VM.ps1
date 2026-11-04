@@ -26,7 +26,8 @@ function Set-VMConnection([object]$Connection) {
     $identity = $Connection.IdentityFile.Replace('\', '/')
     $known = $Connection.KnownHostsFile.Replace('\', '/')
     if ($identity -match '["\r\n]' -or $known -match '["\r\n]') { throw 'Unexpected SSH path.' }
-    $fragment = "Host $($Connection.Alias)`n    HostName $($Connection.Address)`n    User dev`n    IdentityFile `"$identity`"`n    UserKnownHostsFile `"$known`"`n    IdentitiesOnly yes`n    StrictHostKeyChecking ask`n    ForwardAgent no`n    ForwardX11 no`n    PermitLocalCommand no`n    ExitOnForwardFailure yes`n"
+    $fragment = "Host $($Connection.Alias)`n    HostName $($Connection.Address)`n    User dev`n    IdentityFile `"$identity`"`n    UserKnownHostsFile `"$known`"`n    IdentitiesOnly yes`n    StrictHostKeyChecking yes`n    ForwardAgent no`n    ForwardX11 no`n    PermitLocalCommand no`n    ExitOnForwardFailure yes`n"
+    Save-VMHostPin $Connection.KnownHostsFile $Connection.Address $Connection.HostPublicKey
     $encoding = New-Object Text.UTF8Encoding($false)
     [IO.File]::WriteAllText((Join-Path $Connection.Directory 'ssh.conf'), $fragment, $encoding)
     if ($updated -cne $config) {
@@ -34,7 +35,7 @@ function Set-VMConnection([object]$Connection) {
         if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination "$path.workstation-vm-backup" -Force }
         $temporary = "$path.workstation-vm.tmp"
         [IO.File]::WriteAllText($temporary, $updated, $encoding)
-        if (Test-Path -LiteralPath $path) { [IO.File]::Replace($temporary, $path, $null) }
+        if (Test-Path -LiteralPath $path) { [IO.File]::Replace($temporary, $path, [NullString]::Value) }
         else { [IO.File]::Move($temporary, $path) }
     }
 }
@@ -45,7 +46,7 @@ function Set-VMShortcuts([object]$Connection) {
             $path = Join-Path $Connection.Directory ($item.File + '.lnk')
             $link = $shell.CreateShortcut($path)
             $target = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-            $arguments = '-NoLogo -NoProfile -File "' + (Join-Path (Join-Path ([Environment]::GetFolderPath('ProgramFiles')) ('Workstation\' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value)) 'Invoke-VM.ps1') + '" -Action ' + $item.Action + ' -Name ' + $Connection.Name + ' -FromShortcut'
+            $arguments = '-NoLogo -NoProfile -File "' + (Join-Path (Get-VMStore).ProgramRoot 'Invoke-VM.ps1') + '" -Action ' + $item.Action + ' -Name ' + $Connection.Name + ' -FromShortcut'
             if ((Test-Path -LiteralPath $path) -and ($link.TargetPath -ine $target -or $link.Arguments -cne $arguments)) { throw "Unmanaged shortcut preserved: $path" }
             $link.TargetPath = $target; $link.Arguments = $arguments; $link.WorkingDirectory = $env:USERPROFILE
             $link.Description = "$($item.File) temporary VM $($Connection.Name)"
@@ -120,8 +121,7 @@ try {
     if (-not (Test-Path -LiteralPath $settings.VSCodePath)) { throw "VM is ready. Connect with ssh $($connection.Alias), or rerun host application setup to refresh the VS Code path." }
     . (Join-Path $PSScriptRoot 'VM-Editor.ps1')
     $editor = Initialize-VMEditor $settings.VSCodePath $connection.InstallationId
-    & $settings.VSCodePath @editor --new-window --remote ("ssh-remote+" + $connection.Alias) /home/dev/projects
-    if ($LASTEXITCODE -ne 0) { throw "VM is ready; VS Code could not open it. Connect with ssh $($connection.Alias)." }
+    $null = Start-VMEditor $settings.VSCodePath $editor $connection.Alias
     Write-Host "Ready: $Name. SSH: ssh $($connection.Alias)"
 } catch {
     if ($FromShortcut) { Write-Host $_ -ForegroundColor Red; Read-Host 'Press Enter to close' | Out-Null; exit 1 }

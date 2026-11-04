@@ -68,9 +68,9 @@ wvm destroy takehome   # Remove this temporary VM and its files
 
 Names use 2-32 lowercase letters, digits or hyphens, beginning with a letter and ending with a letter or digit. Named commands skip the name question. `new` with an existing managed name preserves its VM and disk and resumes unfinished creation instead of reinstalling. CPU and RAM default to saved setup answers; `wvm new takehome -CPUs 4 -MemoryMB 8192` can override them for a new VM. Disk capacity comes from the selected image. Existing VMs are never resized by these commands. `destroy` requires an explicit name and also supports `-WhatIf` and `-Confirm`.
 
-The first image preparation uses a **new dedicated builder VM**, installs Ubuntu and the workstation tools, seals it and copies its powered-off disk into a versioned image. It can take as long as the initial installation; later `new` operations create a separate differencing disk and do not rebuild PHP or reinstall tools. Each VM receives its own Hyper-V ID, hostname, machine ID and SSH host keys. Image creation is refused if the builder has known external-account credential files. Host private keys are never included; the builder has no external sign-in step and its account password is removed before publication. First connection still verifies the SSH host key and asks for that VM's own console/sudo password. No password is placed in the seed ISO or request records.
+The first image preparation uses a **new dedicated builder VM**, installs Ubuntu and the workstation tools, seals it and copies its powered-off disk into a versioned image. It can take as long as the initial installation; later `new` operations create a separate differencing disk and do not rebuild PHP or reinstall tools. Each VM receives its own Hyper-V ID, hostname, machine ID and SSH host keys. Image creation is refused if the builder has known external-account credential files. Host private keys are never included; the builder has no external sign-in step and its account password is removed before publication. For each temporary VM, Windows generates a unique Ed25519 SSH server identity in its protected instance directory and supplies it through the local read-only NoCloud ISO. The frontend pins the matching public key before connecting, including after a DHCP address change; a conflicting existing pin is refused. The Windows login private key is never included. The guest server private key is instance-specific sensitive data in the seed and instance directory, removed with that VM. First account finalization asks for the VM's own console/sudo password. No password is placed in the seed ISO or operation records.
 
-`wvm template -Refresh` builds and selects a new image. Existing child disks keep their original image; older images are retained while their children may still use them. Keep image directories in place. If preparation is interrupted, its recorded builder and stage are reused where safe; ambiguous sealing/conversion failures stop for inspection rather than publishing an unverified disk. Installing or updating commands requires a clean committed checkout. Image creation uses the installed bundle, Packer template and bootstrap scripts. An interrupted builder retains its original package; installing newer commands does not replace its recovery payload. Repeating installation with the same revision, answers and editor path reuses the installed package. Older packages are retained for recovery.
+`wvm template -Refresh` builds and selects a new image. Existing child disks keep their original image; older images are retained while their children may still use them. Keep image directories in place. If preparation is interrupted, its recorded builder and stage are reused where safe; ambiguous sealing/conversion failures stop for inspection rather than publishing an unverified disk. Installing or updating commands requires a clean committed checkout. Image creation uses the installed bundle, Packer template and bootstrap scripts. An interrupted builder retains its original package; installing newer commands does not replace its recovery payload. Repeating installation with the same revision, answers and editor path reuses the installed package. Older packages are retained for recovery. New image builds share a protected ISO cache; Packer still checks the pinned ISO checksum before using it.
 
 `open` refreshes a managed SSH alias such as `ws-takehome`, then launches VS Code as the desktop user. It adds a marked Include block to the user's SSH config, preserves other entries and rejects direct alias collisions. Per-VM SSH fragments, host-key records and **Open / Stop / Destroy** shortcuts live in `%LOCALAPPDATA%\Workstation\Connections/<name>`, separately from the protected VM disks and ownership records. **VM folders** in the Start menu opens these directories; the other Start menu entries ask for the VM name. Per-VM shortcuts carry their own explicit name. Hyper-V operations request UAC for the same Windows account; no background administration service, scheduled task or automatic group membership is installed.
 
@@ -78,7 +78,7 @@ The backend is installed under `%ProgramFiles%\Workstation/<Windows SID>/Package
 
 Destruction checks the recorded Hyper-V ID, directory boundaries, disk parent chain, linked paths and references from other VMs. It removes only that temporary VM and its owned directory; the desktop frontend removes a matching connection directory separately. It never adopts or deletes manually created VMs, the main `workstation` VM, `dev-vm`, `backup-vm` or shared images. Old user-writable VM records are not silently adopted or migrated. Filesystem deletion is not secure erasure.
 
-The VM lifecycle commands and image factory have not yet been exercised end to end. Their validation remains part of the deferred final Windows test run.
+The image factory and core lifecycle have been exercised on a Windows 11 host, but the complete workflow is not yet validated. See the validation checkpoint below; this is a backup checkpoint, not a release-readiness claim.
 
 ## Before the first run
 
@@ -166,8 +166,70 @@ For custom VM sizes, switch names or usernames, use `host/windows/hyperv/New-Wor
 
 Isolated trials can pass `-KnownHostsFile` to keep their SSH host-key records separate from the user's normal `known_hosts`; strict host-key checking remains enabled.
 
+## Windows state regression checks
+
+Run `powershell.exe -NoProfile -File tests/windows/Test-VMState.ps1` or `pwsh -NoProfile -File tests/windows/Test-VMState.ps1`. These checks use generated filesystem fixtures, child PowerShell processes and mocked Hyper-V discovery. They require no administrator rights or Hyper-V, and verify atomic record replacement, path boundaries, interrupted deletion recovery, generation ownership, SSH host-key pinning across IP changes, stale-address rejection, MAC collision/concurrency refusal native stderr/exit-code handling, and asynchronous GUI launch argument quoting. `-TemporaryRoot` can select a writable scratch directory. The existing manual CI workflow also runs them on Windows PowerShell 5.1 and PowerShell 7.
+
+Full Hyper-V integration trials require an elevated process. The backend installer accepts a fixed-format `ValidationId` only at installation; runtime requests cannot choose state paths. A validation package uses separate Program Files packages and `%ProgramData%\Workstation\Validation/<id>` state, plus separate local connection/editor files. This avoids changing production setup answers, selected images, SSH config or editor profiles. Validation namespaces are bound to the installing Windows SID. Their compact paths also stay within Hyper-V's legacy file path limits without changing Windows-wide long-path policy.
+
 ## Windows trial status
 
 This workflow has not yet been run end to end on Windows. During the first trial, confirm both terminal profiles, SSH and Remote - SSH access, reboot recovery, interrupted Ansible recovery, and a repeated run that reuses the VM without provisioning it again. An unrelated VM or SSH alias must remain untouched.
 
 References: [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/install), [Remote - SSH](https://code.visualstudio.com/docs/remote/ssh), [Catppuccin](https://github.com/catppuccin/windows-terminal) (MIT attribution in the repository's `LICENSE`), [Packer Hyper-V builder](https://developer.hashicorp.com/packer/integrations/hashicorp/hyperv/latest/components/builder/iso), [Ubuntu autoinstall](https://canonical-subiquity.readthedocs-hosted.com/en/latest/reference/autoinstall-reference.html).
+
+
+### DHCP identity and reconnects
+
+New temporary VMs keep a per-installation static, locally administered MAC and
+use that MAC as their DHCP client identifier. A host-wide allocation lock checks
+all registered VM and host adapters before assignment; a collision refuses the
+operation instead of changing another VM. Existing records without a managed MAC
+keep their current adapter identity. This is DHCP lease stability, not a static IP
+reservation: Windows can still change the Default Switch subnet or lease.
+
+`wvm open <name>` discovers the current address again and verifies both the pinned
+per-instance SSH host key and `/etc/workstation-bootstrap-id` before returning it.
+The SSH alias stays the same and its address is refreshed. A TCP listener alone
+does not prove that a recycled address belongs to the intended VM. Multiple VMs
+have separate identities, pins and connection directories.
+
+Workstation does not guess an unused static IP on Default Switch or create a
+second WinNAT. Microsoft's [NAT setup guide](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/setup-nat-network)
+requires guest address configuration and limits WinNAT to one internal NAT prefix.
+A dedicated static-IP mode needs explicit ownership of a compatible NAT, subnet
+overlap checks and an address allocator; it is not enabled by these changes.
+
+
+### Validation checkpoint — 2026-11-04
+
+This backup preserves work in progress. On the Windows 11 test host:
+
+- Image creation, Ubuntu provisioning/sealing, child creation, repeated open,
+  stop and interrupted-construction recovery passed. Recovery retained the same
+  Hyper-V VM identity and differencing disk; an actual DHCP address change was
+  handled with the guest's pinned SSH key and installation identity.
+- Real Hyper-V policy installation passed. An injected ACL installation failure
+  left the test adapter disconnected.
+- Public DNS/HTTPS and a Python package index were reachable. Host and IPv4/IPv6
+  peer canaries and a published container port were first verified reachable
+  with narrow test allowances, then denied after removing them. Guest-firewall
+  disablement and container probes did not bypass the Hyper-V boundary.
+- Native password finalization, password-required sudo, root lock and effective
+  SSH policy passed. Unelevated writes to the protected package/state were
+  denied; repeated SSH-fragment/shortcut generation preserved a fixture alias.
+- The original development/backup VM configuration snapshots matched after the
+  network/account tests.
+- Eighteen local regression checks passed on Windows PowerShell 5.1; twenty
+  checks, including later GUI-launch argument checks, passed on PowerShell 7.
+
+The isolated VS Code window/remote server did **not** become usable. Direct GUI
+launch did not resolve it. The final real interrupted-deletion/name-reuse tests
+were not reached; filesystem deletion-journal regressions passed separately.
+Clean-machine portability and nested Windows testing remain unverified.
+
+Before treating editor isolation as complete, also investigate current VS Code
+`--shared-data-dir` behavior: Microsoft's [multi-instance launcher documentation](https://github.com/microsoft/vscode/blob/main/.agents/skills/launch/SKILL.md)
+identifies application storage outside `--user-data-dir`. No personal account
+storage was inspected or copied during this validation. Separate editor data and
+extensions alone must not be presented as a complete account-isolation boundary.

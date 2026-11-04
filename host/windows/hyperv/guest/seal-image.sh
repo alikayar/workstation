@@ -33,6 +33,7 @@ systemctl enable cloud-init-local.service cloud-init.service cloud-config.servic
 cloud-init clean --logs --machine-id --seed
 rm -f /var/lib/dbus/machine-id
 ln -s /etc/machine-id /var/lib/dbus/machine-id
+install -d -m 755 /var/lib/workstation
 printf '%s\n' "$expected" > /var/lib/workstation/image-sealed
 sync
 printf 'WORKSTATION_IMAGE_SEALED=%s\n' "$expected"

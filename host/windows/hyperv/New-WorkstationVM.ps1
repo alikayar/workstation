@@ -12,6 +12,7 @@ param(
     [switch]$TemplateBuild,
     [string]$PreparedPayload,
     [string]$TrustedPackerPath,
+    [string]$CacheDirectory,
     [string]$SwitchName = 'Default Switch',
     [ValidateRange(2, 64)][int]$CPUs = 4,
     [ValidateRange(4096, 131072)][int]$MemoryMB = 8192,
@@ -267,7 +268,7 @@ try {
     $addresses = @(Get-NetIPAddress -InterfaceAlias $adapter -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '169.254.*' })
     if ($addresses.Count -ne 1) { throw "Expected one IPv4 address on '$adapter'." }
     $hostAddress = $addresses[0].IPAddress
-    $env:PACKER_CACHE_DIR = Join-Path $state 'cache'
+    $env:PACKER_CACHE_DIR = if ($CacheDirectory) { [IO.Path]::GetFullPath($CacheDirectory) } else { Join-Path $state 'cache' }
     New-Item -ItemType Directory -Path $machines, $env:PACKER_CACHE_DIR -Force | Out-Null
     if ($PreparedPayload) {
         if (-not $TrustedPackerPath -or -not (Test-Path -LiteralPath $TrustedPackerPath)) { throw 'Protected Packer executable is missing. Rerun host setup.' }

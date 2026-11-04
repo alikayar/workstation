@@ -14,18 +14,23 @@ function Remove-VMImageBuilder([object]$Build) {
     $store = Get-VMStore
     $directory = Assert-VMPath (Join-Path $store.Images ('build-' + $Build.Id)) $store.Images
     $state = Join-Path $directory $Build.VMName
-    $installation = Read-VMJson (Join-Path $state 'installation.json')
-    if ($installation.Purpose -ne 'TemplateBuilder' -or $installation.Id -cne $Build.InstallationId) { throw 'Image builder ownership differs; it was preserved.' }
     $vm = Get-VM -Name $Build.VMName -ErrorAction SilentlyContinue
+    $manifest = Join-Path $state 'installation.json'
+    if (Test-Path -LiteralPath $manifest) {
+        $installation = Read-VMJson $manifest
+        if ($installation.Purpose -ne 'TemplateBuilder' -or $installation.Id -cne $Build.InstallationId) { throw 'Image builder ownership differs; it was preserved.' }
+    } elseif ($vm -or $Build.Stage -ne 'Published' -or $Build.InstallationId -cnotmatch '^[a-f0-9]{32}$') {
+        throw 'Image builder ownership record is missing. It was preserved.'
+    }
     if ($vm) {
         if ([string]$vm.Id -cne $Build.VMId -or $vm.State -ne 'Off') { throw 'Image builder must retain its recorded identity and be off before cleanup.' }
         $null = Assert-VMPath $vm.Path $directory
     }
-    Assert-VMTree $directory $store.Images
+    if (Test-Path -LiteralPath $directory) { Assert-VMTree $directory $store.Images }
     Assert-NoOtherDiskUsers @{ Directory = $directory } $vm
     if ($vm) { Remove-VM -VM $vm -Force }
     # Only the dedicated factory directory; published images are sibling directories.
-    Remove-Item -LiteralPath $directory -Recurse -Force
+    if (Test-Path -LiteralPath $directory) { Remove-Item -LiteralPath $directory -Recurse -Force }
     Remove-Item -LiteralPath (Join-Path $store.Images 'build.json')
 }
 function Get-OrCreateVMImage([object]$Settings, [object]$Setup, [bool]$Refresh) {
@@ -69,6 +74,8 @@ function Get-OrCreateVMImage([object]$Settings, [object]$Setup, [bool]$Refresh) 
             $entry = Join-Path $package 'hyperv\New-WorkstationVM.ps1'
             if (-not (Test-Path -LiteralPath $entry)) { throw 'Repository moved. Rerun host setup to update the VM command installation.' }
             $arguments = @{ GitName = $Setup.GitName; GitEmail = $Setup.GitEmail; PublicKeyPath = $Setup.PublicKeyPath; VMName = $build.VMName; StateRoot = $builderRoot; CPUs = $Setup.Resources.CPUs; MemoryMB = $Setup.Resources.MemoryMB; DiskGB = $Setup.Resources.DiskGB; KnownHostsFile = (Join-Path $state 'known_hosts'); TemplateBuild = $true; PreparedPayload = (Join-Path $package 'payload'); TrustedPackerPath = (Join-Path $package 'tools\packer.exe') }
+            # Older pinned recovery packages keep their original cache behavior.
+            if ((Get-Command -Name $entry).Parameters.ContainsKey('CacheDirectory')) { $arguments.CacheDirectory = Join-Path $store.Root 'Cache' }
             & $entry @arguments | Out-Host
             $installation = Read-VMJson (Join-Path $state 'installation.json')
             $builder = Get-VM -Name $build.VMName -ErrorAction Stop
@@ -92,13 +99,10 @@ function Get-OrCreateVMImage([object]$Settings, [object]$Setup, [bool]$Refresh) 
             $target = "dev@$address"
             & (Join-Path ([Environment]::SystemDirectory) 'OpenSSH\scp.exe') @options (Join-Path $package 'hyperv\guest\seal-image.sh') "${target}:.local/state/workstation-seal-image.sh"
             if ($LASTEXITCODE -ne 0) { throw 'Could not upload the image sealer.' }
-            $previousPreference = $ErrorActionPreference
-            try {
-                # Shutdown may close SSH with 255 after the sealer has confirmed completion.
-                $ErrorActionPreference = 'Continue'
-                $output = @(& (Join-Path ([Environment]::SystemDirectory) 'OpenSSH\ssh.exe') @options $target "sudo -n sh .local/state/workstation-seal-image.sh $($build.InstallationId) dev" 2>&1)
-                $sshExit = $LASTEXITCODE
-            } finally { $ErrorActionPreference = $previousPreference }
+            # Shutdown may close SSH with 255 after confirmed sealing.
+            $seal = Invoke-VMNative (Join-Path ([Environment]::SystemDirectory) 'OpenSSH\ssh.exe') ($options + @($target, "sudo -n sh .local/state/workstation-seal-image.sh $($build.InstallationId) dev"))
+            $sshExit = $seal.ExitCode
+            $output = $seal.Output
             if ($sshExit -notin @(0, 255)) { throw 'Image sealer failed; the builder was retained.' }
             if ($output -notcontains "WORKSTATION_IMAGE_SEALED=$($build.InstallationId)") { throw 'Image sealing was not confirmed; no image was published.' }
             $build.Stage = 'Sealed'

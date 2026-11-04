@@ -45,3 +45,19 @@ function Initialize-VMEditor([string]$CodePath, [string]$InstallationId) {
     }
     return $arguments
 }
+
+
+# Use the GUI executable for window launch. CLI operations (extension management)
+# stay synchronous, but the editor window must not hold the calling terminal.
+function Start-VMEditor([string]$CodePath, [string[]]$ProfileArguments, [string]$Alias) {
+    if ($Alias -cnotmatch '^ws-[a-z][a-z0-9-]{0,30}[a-z0-9]$') { throw 'Invalid managed editor alias.' }
+    $executable = Join-Path (Split-Path (Split-Path $CodePath)) 'Code.exe'
+    if (-not (Test-Path -LiteralPath $executable)) { throw 'VS Code GUI executable is missing. Rerun host application setup.' }
+    $arguments = @($ProfileArguments) + @('--new-window', '--remote', ('ssh-remote+' + $Alias), '/home/dev/projects')
+    $quoted = @($arguments | ForEach-Object {
+        if ($_ -match '["\r\n]') { throw 'Unexpected editor argument.' }
+        '"' + [regex]::Replace($_, '(\\+)$', '$1$1') + '"'
+    })
+    $process = Start-Process -FilePath $executable -ArgumentList ($quoted -join ' ') -WindowStyle Normal -PassThru
+    try { return $process.Id } finally { $process.Dispose() }
+}
