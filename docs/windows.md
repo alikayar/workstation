@@ -35,7 +35,7 @@ If your own machine blocks local PowerShell scripts, review the scripts and your
 
 ## What you get
 
-- Windows Terminal with Catppuccin Mocha, 88% opacity, acrylic blur and JetBrains Mono Nerd Font at 12 pt.
+- Windows Terminal with Slate Glass (adapted from Catppuccin Mocha), 62% opacity, acrylic blur, 20/16 padding and JetBrains Mono Nerd Font at 13 pt.
 - A **Workstation** PowerShell 7 profile and a matching **Workstation (Windows PowerShell 5.1)** profile for Hyper-V work.
 - The Ubuntu Starship layout, with an explicit `host:<computer-name>` label on Windows. PSReadLine supplies history suggestions where supported and Tab menu completion.
 - VS Code and Remote - SSH.

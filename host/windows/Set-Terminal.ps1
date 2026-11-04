@@ -87,7 +87,7 @@ try { $fontAvailable = $installedFonts.Families.Name -contains 'JetBrainsMono Ne
 if (-not $fontAvailable -and [WorkstationFont]::AddFontResourceEx($fontPath, 0, [IntPtr]::Zero) -eq 0) {
     throw 'The font could not be loaded. Sign out and back in before retrying.'
 }
-$scheme = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'mocha.json') -Raw | ConvertFrom-Json
+$scheme = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'slate-glass.json') -Raw | ConvertFrom-Json
 $startup = Join-Path $destination 'Start-Shell.ps1'
 $pwsh = (Get-Command pwsh.exe -ErrorAction Stop).Source
 $profiles = @(
@@ -99,8 +99,8 @@ $profiles = @(
         commandline = '"' + $_.executable + '" -NoLogo -NoProfile -NoExit -File "' + $startup + '"'
         startingDirectory = '%USERPROFILE%'
         colorScheme = $scheme.name
-        font = [ordered]@{ face = 'JetBrainsMono Nerd Font'; size = 12 }
-        opacity = 88; useAcrylic = $true; padding = '12, 10'
+        font = [ordered]@{ face = 'JetBrainsMono Nerd Font'; size = 13; weight = 'normal' }
+        opacity = 62; useAcrylic = $true; padding = '20, 16'
         cursorShape = 'bar'; hidden = $false
     }
 }
