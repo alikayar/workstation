@@ -16,6 +16,18 @@ $vmState = Join-Path $state 'HyperV\workstation'
 $utf8 = New-Object Text.UTF8Encoding($false)
 . "$PSScriptRoot\host\windows\VM-Resources.ps1"
 
+function Save-SetupInputs([object]$Answers) {
+    New-Item -ItemType Directory -Path $state -Force | Out-Null
+    $temporary = Join-Path $state ('setup-' + [Guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        [IO.File]::WriteAllText($temporary, ($Answers | ConvertTo-Json -Depth 4), $utf8)
+        if (Test-Path -LiteralPath $inputsPath) { [IO.File]::Replace($temporary, $inputsPath, $null) }
+        else { [IO.File]::Move($temporary, $inputsPath) }
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
+    }
+}
+
 if ($Elevated) {
     try {
         if (-not $isAdministrator -or $identity.User.Value -ne $ExpectedSid) {
@@ -38,12 +50,36 @@ if ($Elevated) {
         $env:Path += ";$env:SystemRoot\System32\OpenSSH"
         $publicKey = $inputs.PublicKeyPath
         $privateKey = $publicKey.Substring(0, $publicKey.Length - 4)
-        if (-not (Test-Path -LiteralPath $publicKey)) {
-            if (Test-Path -LiteralPath $privateKey) { throw "Private key already exists without its .pub file: $privateKey. Restore its public key before retrying." }
+        if (-not (Test-Path -LiteralPath $privateKey)) {
+            if (Test-Path -LiteralPath $publicKey) { throw "Public key already exists without its private key: $publicKey. Restore the matching private key; setup will not replace the identity." }
             New-Item -ItemType Directory -Path (Split-Path $publicKey) -Force | Out-Null
-            Write-Host 'Creating your workstation SSH key. Choose a passphrase when prompted.'
-            & ssh-keygen.exe -t ed25519 -f $privateKey
-            if ($LASTEXITCODE -ne 0) { throw 'SSH key creation did not finish.' }
+            Write-Host 'Creating the dedicated Workstation SSH key automatically.'
+            # ProcessStartInfo preserves the empty -N argument in Windows PowerShell 5.1.
+            $start = New-Object Diagnostics.ProcessStartInfo
+            $start.FileName = (Get-Command ssh-keygen.exe -CommandType Application -ErrorAction Stop).Source
+            $start.Arguments = '-q -t ed25519 -N "" -f "' + $privateKey + '"'
+            $start.UseShellExecute = $false
+            $keyProcess = [Diagnostics.Process]::Start($start)
+            $keyProcess.WaitForExit()
+            if ($keyProcess.ExitCode -ne 0) { throw 'SSH key creation did not finish.' }
+            & icacls.exe $privateKey /inheritance:r /grant:r "*$($identity.User.Value):F" '*S-1-5-18:F' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Could not restrict permissions on the generated SSH private key.' }
+        }
+        if (-not (Test-Path -LiteralPath $publicKey)) {
+            # Recover a missing .pub after an interrupted automatic key creation.
+            # Existing encrypted private keys are left intact and never trigger a new identity.
+            $start = New-Object Diagnostics.ProcessStartInfo
+            $start.FileName = (Get-Command ssh-keygen.exe -CommandType Application -ErrorAction Stop).Source
+            $start.Arguments = '-y -P "" -f "' + $privateKey + '"'
+            $start.UseShellExecute = $false
+            $start.RedirectStandardOutput = $true
+            $start.RedirectStandardError = $true
+            $keyProcess = [Diagnostics.Process]::Start($start)
+            $derivedPublicKey = $keyProcess.StandardOutput.ReadToEnd()
+            $null = $keyProcess.StandardError.ReadToEnd()
+            $keyProcess.WaitForExit()
+            if ($keyProcess.ExitCode -ne 0) { throw 'Could not recover the missing SSH public key. Restore the original .pub file for this private key; no replacement was generated.' }
+            [IO.File]::WriteAllText($publicKey, $derivedPublicKey.Trim() + "`n", $utf8)
         }
         $fingerprint = Join-Path $vmState 'ssh-host-key.pub'
         if (Test-Path -LiteralPath $fingerprint) {
@@ -60,60 +96,55 @@ if ($Elevated) {
     }
 }
 if ($isAdministrator) { throw 'Start .\setup.ps1 in a normal PowerShell window. It requests elevation when needed.' }
-$resources = Get-WorkstationVMResources
-if (Test-Path -LiteralPath $inputsPath) {
-    $savedInputs = Get-Content -LiteralPath $inputsPath -Raw | ConvertFrom-Json
-    if ($savedInputs.PSObject.Properties.Name -contains 'Resources') {
-        foreach ($entry in @(@{ Name = 'CPUs'; Env = 'WORKSTATION_VM_CPUS' }, @{ Name = 'MemoryMB'; Env = 'WORKSTATION_VM_MEMORY_MB' }, @{ Name = 'DiskGB'; Env = 'WORKSTATION_VM_DISK_GB' })) {
-            if ([Environment]::GetEnvironmentVariable($entry.Env, 'Process') -and
-                $resources.($entry.Name) -ne $savedInputs.Resources.($entry.Name)) {
-                throw "$($entry.Env) differs from the saved installation. Setup does not resize existing VMs."
-            }
-        }
-        $resources = $savedInputs.Resources
-    } else {
-        $savedInputs | Add-Member -NotePropertyName Resources -NotePropertyValue $resources
-        [IO.File]::WriteAllText($inputsPath, ($savedInputs | ConvertTo-Json -Depth 4), $utf8)
-    }
-}
+# Resolve saved settings before prompting or making host changes.
 if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) { throw 'Install Git for Windows, reopen PowerShell and run setup again.' }
-& "$PSScriptRoot\host\windows\Install-Host.ps1"
-
-if (-not (Test-Path -LiteralPath $inputsPath)) {
+$existingInstallation = Join-Path $vmState 'installation.json'
+$existing = if (Test-Path -LiteralPath $existingInstallation) { Get-Content -LiteralPath $existingInstallation -Raw | ConvertFrom-Json } else { $null }
+$savedInputs = if (Test-Path -LiteralPath $inputsPath) { Get-Content -LiteralPath $inputsPath -Raw | ConvertFrom-Json } else { $null }
+if ($null -ne $savedInputs -and $savedInputs.PSObject.Properties.Name -contains 'Resources') {
+    $resources = Get-WorkstationVMResources -SavedResources $savedInputs.Resources
+} elseif ($null -ne $existing -and $existing.Schema -eq 2) {
+    $resources = Get-WorkstationVMResources -SavedResources $existing.Resources
+} else {
+    $resources = Get-WorkstationVMResources
+    # Legacy VMs keep their configuration; questions are only for new installations.
+    if ($null -eq $existing) { $resources = Read-WorkstationVMResources -Defaults $resources }
+}
+if ($null -ne $savedInputs) {
+    if ($savedInputs.PSObject.Properties.Name -notcontains 'Resources') {
+        $savedInputs | Add-Member -NotePropertyName Resources -NotePropertyValue $resources
+        Save-SetupInputs $savedInputs
+    }
+} else {
     function Read-SetupValue([string]$Label, [string]$Default) {
-        $answer = Read-Host "$Label [$Default]"
-        if ([string]::IsNullOrWhiteSpace($answer)) { $answer = $Default }
-        if ([string]::IsNullOrWhiteSpace($answer)) { throw "$Label is required. Run setup again." }
-        return $answer.Trim()
+        while ($true) {
+            $prompt = if ([string]::IsNullOrWhiteSpace($Default)) { "$Label (required)" } else { "$Label [$Default]" }
+            $answer = Read-Host $prompt
+            if ([string]::IsNullOrWhiteSpace($answer)) { $answer = $Default }
+            if (-not [string]::IsNullOrWhiteSpace($answer)) { return $answer.Trim() }
+            Write-Host "$Label is required." -ForegroundColor Yellow
+        }
     }
     $name = & git.exe -C $PSScriptRoot config user.name
     $email = & git.exe -C $PSScriptRoot config user.email
-    $existingInstallation = Join-Path $vmState 'installation.json'
-    if (Test-Path -LiteralPath $existingInstallation) {
-        $existing = Get-Content -LiteralPath $existingInstallation -Raw | ConvertFrom-Json
+    $publicKeyPath = "$env:USERPROFILE\.ssh\workstation_ed25519.pub"
+    if ($null -ne $existing) {
         $name = $existing.GitName
         $email = $existing.GitEmail
-        if ($existing.Schema -eq 2) {
-            foreach ($entry in @(@{ Name = 'CPUs'; Env = 'WORKSTATION_VM_CPUS' }, @{ Name = 'MemoryMB'; Env = 'WORKSTATION_VM_MEMORY_MB' }, @{ Name = 'DiskGB'; Env = 'WORKSTATION_VM_DISK_GB' })) {
-                if ([Environment]::GetEnvironmentVariable($entry.Env, 'Process') -and
-                    $resources.($entry.Name) -ne $existing.Resources.($entry.Name)) {
-                    throw "$($entry.Env) differs from the saved VM installation. Setup does not resize existing VMs."
-                }
-            }
-            $resources = $existing.Resources
+        if (-not (Test-Path -LiteralPath $publicKeyPath)) {
+            throw 'An existing VM has no saved setup answers or default public key. Restore setup.json and its original SSH key; setup will not generate a replacement identity.'
         }
     }
     $inputs = @{
         GitName = Read-SetupValue 'Git name' $name
         GitEmail = Read-SetupValue 'Git email' $email
-        PublicKeyPath = Read-SetupValue 'SSH public key (.pub; created if missing)' "$env:USERPROFILE\.ssh\workstation_ed25519.pub"
+        PublicKeyPath = $publicKeyPath
         Resources = $resources
     }
-    $inputs.PublicKeyPath = [IO.Path]::GetFullPath($inputs.PublicKeyPath)
-    if ([IO.Path]::GetExtension($inputs.PublicKeyPath) -ne '.pub') { throw 'Choose a public key path ending in .pub.' }
-    New-Item -ItemType Directory -Path $state -Force | Out-Null
-    [IO.File]::WriteAllText($inputsPath, ($inputs | ConvertTo-Json -Depth 4), $utf8)
+    Save-SetupInputs $inputs
 }
+& "$PSScriptRoot\host\windows\Install-Host.ps1"
+
 Write-Host 'Windows will ask for administrator access to prepare SSH, Hyper-V and Ubuntu. Use this same account.'
 Write-Host "VM resources: $($resources.CPUs) vCPUs, $($resources.MemoryMB) MiB RAM, $($resources.DiskGB) GiB disk. Existing VMs are not resized."
 $windowsPowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"

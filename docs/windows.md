@@ -8,18 +8,22 @@ cd workstation
 .\setup.ps1
 ```
 
-Setup asks for your Git name, email and SSH public-key path, with defaults where available. Press Enter to keep a default. It saves your answers, installs the host applications, requests administrator access, and prepares Ubuntu on Hyper-V. Approve elevation with the **same Windows account**. If the selected key does not exist, SSH key generation asks you for a passphrase; existing private keys are never overwritten or copied into the VM.
+Setup asks for VM CPU count, memory and disk capacity, followed by your Git name and email. Each available default appears in brackets; press Enter without typing a value to accept it. Resource defaults are **4 CPUs, 8192 MiB RAM and 80 GiB disk**. Invalid resource answers repeat the same question. Your Git identity defaults to the existing Git configuration; a missing name or email must be supplied.
 
-For a new installation, set resource sizes in that normal PowerShell window before running setup:
+Answers are saved atomically in `%LOCALAPPDATA%\Workstation\setup.json` before host application installation and elevation. Subsequent runs reuse the saved answers without repeating the questions. Setup installs the host applications, requests administrator access and prepares Ubuntu on Hyper-V. Approve elevation with the **same Windows account**.
+
+SSH key selection is automatic. Setup creates a dedicated Ed25519 key at `%USERPROFILE%\.ssh\workstation_ed25519` if missing, or reuses the existing pair. New keys have no passphrase prompt and their private file permissions are restricted to your Windows account and SYSTEM. The private key stays on the host; only the public key enters the VM. A public key without its matching private key stops setup rather than replacing the identity. An interrupted key creation can recover a missing public key from an existing unencrypted private key. Previously saved custom key paths remain in use; setup does not remove encryption from existing keys, so connecting with a protected existing key can still ask for its passphrase.
+
+Optional environment variables change the defaults offered on the first run:
 
 ```powershell
-$env:WORKSTATION_VM_CPUS = '4'
-$env:WORKSTATION_VM_MEMORY_MB = '8192'
-$env:WORKSTATION_VM_DISK_GB = '80'
+$env:WORKSTATION_VM_CPUS = '6'
+$env:WORKSTATION_VM_MEMORY_MB = '12288'
+$env:WORKSTATION_VM_DISK_GB = '120'
 .\setup.ps1
 ```
 
-These are logical CPU counts, MiB of memory and GiB of virtual disk capacity. Defaults are 4 / 8192 / 80; accepted ranges are 2–64 CPUs, 4096–131072 MiB and 40–2048 GiB. Invalid values stop before host provisioning. Setup saves non-secret resource settings in `setup.json` before elevation, so they survive a reboot and do not depend on environment-variable inheritance. Reruns reuse the saved sizes and reject conflicting environment values. Existing VMs are never resized automatically. Direct `New-WorkstationVM.ps1` parameters take precedence over environment variables.
+These are logical CPU counts, MiB of memory and GiB of virtual disk capacity. Accepted ranges are 2-64 CPUs, 4096-131072 MiB and 40-2048 GiB. Invalid environment values stop before host provisioning. Saved settings survive reboot and do not depend on environment-variable inheritance. Reruns reject environment values that conflict with saved sizes; clear those overrides to resume with the recorded configuration. Existing VMs are never resized automatically and legacy installations do not receive resource questions. Direct `New-WorkstationVM.ps1` parameters take precedence over environment variables; it also accepts an explicitly selected SSH public key for advanced use.
 
 After provisioning, Ubuntu's own `passwd` tool asks for the development user's console/sudo password over an authenticated SSH terminal. Enter it there, not in environment variables or setup arguments. The password never enters PowerShell variables, Packer's HTTP autoinstall data, JSON payloads or local files. The SSH host key and guest installation marker are checked before this step. If interrupted, rerun setup; successful finalization is recorded in the guest and does not reset the password on subsequent runs.
 
