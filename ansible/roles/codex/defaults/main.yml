@@ -1,6 +1,7 @@
 ---
-codex_installer_url: https://chatgpt.com/codex/install.sh
-codex_installer_sha256: "150e3cf675682efeaac115aa3747add3f27887896d04ce6d0b56478d8b428bf6"
+# Immutable upstream installer revision; a checksum alone cannot freeze a mutable URL.
+codex_installer_url: https://raw.githubusercontent.com/openai/codex/71a4c070369fb761e51fd71009107f398d9f0f81/scripts/install/install.sh
+codex_installer_sha256: "5a8eea5c3716b555fd8e539db7e5b0e7470bcee5693191b4758a0de373624a70"
 codex_installer_path: /tmp/workstation-codex-install.sh
 codex_binary: "{{ workstation_home }}/.local/bin/codex"
 codex_config_dir: "{{ workstation_home }}/.codex"
