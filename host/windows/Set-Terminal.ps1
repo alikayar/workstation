@@ -38,7 +38,6 @@ format = '[host:$hostname]($style) '
 style = 'bold cyan'
 '@
 Write-ChangedText (Join-Path $destination 'starship.toml') $prompt
-Write-ChangedText (Join-Path $destination 'mocha.LICENSE') ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'mocha.LICENSE')))
 Write-ChangedText (Join-Path $destination 'Start-Shell.ps1') ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Start-Shell.ps1')))
 Write-ChangedText (Join-Path $destination 'runtime.json') (@{ StarshipPath = $StarshipPath } | ConvertTo-Json)
 
