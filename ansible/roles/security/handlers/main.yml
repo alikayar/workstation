@@ -1,0 +1,12 @@
+---
+- name: Reload workstation SSH
+  become: true
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+
+- name: Reload workstation firewall
+  become: true
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, reload]
+  changed_when: true

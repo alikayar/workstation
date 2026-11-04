@@ -10,6 +10,9 @@
       tags: [always]
 
   roles:
+    - role: security
+      when: workstation_security_enabled | default(false) | bool
+      tags: [security]
     - role: shell
       tags: [shell, zsh]
     - role: git

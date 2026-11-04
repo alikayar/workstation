@@ -19,6 +19,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($env:OS -ne 'Windows_NT') { throw 'Run this script on the Windows host.' }
+. (Join-Path $PSScriptRoot 'VM-Resources.ps1')
+if (-not $PSBoundParameters.ContainsKey('CPUs')) { $CPUs = Get-WorkstationResource WORKSTATION_VM_CPUS 4 2 64 }
+if (-not $PSBoundParameters.ContainsKey('MemoryMB')) { $MemoryMB = Get-WorkstationResource WORKSTATION_VM_MEMORY_MB 8192 4096 131072 }
+if (-not $PSBoundParameters.ContainsKey('DiskGB')) { $DiskGB = Get-WorkstationResource WORKSTATION_VM_DISK_GB 80 40 2048 }
 if ($UserName -eq 'root') { throw 'Choose a non-root development user.' }
 if ($StateRoot -match '["\r\n]' -or $StateRoot.StartsWith('\\')) { throw 'Use a local state directory without quotes or line breaks.' }
 $windows = Get-CimInstance Win32_OperatingSystem
@@ -58,6 +62,23 @@ function Save-Connection([string]$Address) {
     $json = @{ Address = $Address; User = $UserName } | ConvertTo-Json
     [IO.File]::WriteAllText((Join-Path $state 'connection.json'), $json, [Text.UTF8Encoding]::new($false))
 }
+function Complete-Account([string]$Address) {
+    # Legacy installations retain their original provisioning policy.
+    if ($installation.Schema -lt 2) { return }
+    $deadline = (Get-Date).AddMinutes(2)
+    do {
+        $client = New-Object Net.Sockets.TcpClient
+        try {
+            $ready = $client.ConnectAsync($Address, 22)
+            if ($ready.Wait(2000) -and $client.Connected) { break }
+        } catch { } finally { $client.Dispose() }
+        if ((Get-Date) -ge $deadline) { throw 'Ubuntu SSH is not ready for account finalization. Rerun setup to resume.' }
+        Start-Sleep -Seconds 3
+    } while ($true)
+    $key = $IdentityFile
+    if (-not $key) { $key = $PublicKeyPath.Substring(0, $PublicKeyPath.Length - 4) }
+    & (Join-Path $PSScriptRoot 'Set-GuestAccount.ps1') -Address $Address -UserName $UserName -IdentityFile $key -InstallationId $installation.Id -FinalizerPath (Join-Path $payload 'finalize-account.sh')
+}
 $utf8 = New-Object Text.UTF8Encoding($false)
 $vm = Get-VM -Name $VMName -ErrorAction SilentlyContinue
 if ($vm -and -not (Test-Path -LiteralPath $manifestPath)) {
@@ -65,6 +86,11 @@ if ($vm -and -not (Test-Path -LiteralPath $manifestPath)) {
 }
 if ((Test-Path -LiteralPath $state) -and -not (Test-Path -LiteralPath $manifestPath)) {
     throw "Unrecognized state directory: $state. Inspect it before continuing."
+}
+if (-not (Test-Path -LiteralPath $manifestPath)) {
+    $changes = & git.exe -C $repo status --porcelain
+    if ($LASTEXITCODE -ne 0) { throw 'Run from a Git checkout of Workstation.' }
+    if ($changes) { throw 'Commit or stash local changes before creating a new installation. Its recovery payload uses a committed revision.' }
 }
 if (-not (Test-Path -LiteralPath $state)) {
     New-Item -ItemType Directory -Path $state | Out-Null
@@ -80,11 +106,21 @@ $previousCache = $env:PACKER_CACHE_DIR
 try {
     if (Test-Path -LiteralPath $manifestPath) {
         $installation = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-        if ($installation.Schema -ne 1 -or $installation.Id -notmatch '^[a-f0-9]{32}$' -or $installation.Revision -notmatch '^[a-f0-9]{40,64}$') {
+        if ($installation.Schema -notin @(1, 2) -or $installation.Id -notmatch '^[a-f0-9]{32}$' -or $installation.Revision -notmatch '^[a-f0-9]{40,64}$') {
             throw 'Invalid Workstation installation record; inspect it before continuing.'
         }
         if ($installation.UserName -ne $UserName -or $installation.PublicKey -ne $publicKey -or $installation.GitName -ne $GitName -or $installation.GitEmail -ne $GitEmail) {
             throw 'Resume with the original username, public key and Git identity. Manage changes inside the prepared VM.'
+        }
+        if ($installation.Schema -eq 2) {
+            # Explicit parameters/environment values must agree; omitted values reuse the record.
+            if (-not $PSBoundParameters.ContainsKey('CPUs') -and -not $env:WORKSTATION_VM_CPUS) { $CPUs = $installation.Resources.CPUs }
+            if (-not $PSBoundParameters.ContainsKey('MemoryMB') -and -not $env:WORKSTATION_VM_MEMORY_MB) { $MemoryMB = $installation.Resources.MemoryMB }
+            if (-not $PSBoundParameters.ContainsKey('DiskGB') -and -not $env:WORKSTATION_VM_DISK_GB) { $DiskGB = $installation.Resources.DiskGB }
+        }
+        if ($installation.Schema -eq 2 -and
+            ($installation.Resources.CPUs -ne $CPUs -or $installation.Resources.MemoryMB -ne $MemoryMB -or $installation.Resources.DiskGB -ne $DiskGB)) {
+            throw 'Resource sizes differ from the saved installation. Resume with its original settings; setup does not resize existing VMs.'
         }
     } else {
         $revision = & git.exe -C $repo rev-parse HEAD
@@ -92,8 +128,9 @@ try {
         $branch = & git.exe -C $repo symbolic-ref --short HEAD
         if ($LASTEXITCODE -ne 0) { throw 'Check out a branch before preparing the VM payload.' }
         $installation = [pscustomobject]@{
-            Schema = 1; Id = [Guid]::NewGuid().ToString('N'); Revision = $revision; Branch = $branch
+            Schema = 2; Id = [Guid]::NewGuid().ToString('N'); Revision = $revision; Branch = $branch
             UserName = $UserName; PublicKey = $publicKey; GitName = $GitName; GitEmail = $GitEmail
+            Resources = @{ CPUs = $CPUs; MemoryMB = $MemoryMB; DiskGB = $DiskGB }
         }
         [IO.File]::WriteAllText($manifestPath, ($installation | ConvertTo-Json), $utf8)
     }
@@ -109,10 +146,19 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the saved repository revision.' }
         Move-Item -LiteralPath "$bundle.tmp" -Destination $bundle -Force
         $vars = @{ git_user_name = $GitName; git_user_email = $GitEmail }
+        if ($installation.Schema -eq 2) {
+            $vars.workstation_security_enabled = $true
+            $vars.docker_add_user_to_group = $false
+        }
         [IO.File]::WriteAllText((Join-Path $payload 'workstation-vars.json'), ($vars | ConvertTo-Json), $utf8)
-        # PowerShell checkouts may use CRLF; the guest shell script must use LF.
-        $provision = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'provision-workstation.sh')).Replace("`r`n", "`n")
-        [IO.File]::WriteAllText((Join-Path $payload 'provision-workstation.sh'), $provision, $utf8)
+        $files = @('provision-workstation.sh')
+        if ($installation.Schema -eq 2) { $files += @('finalize-account.sh', 'ubuntu.pkr.hcl') }
+        foreach ($file in $files) {
+            # Every recovery program comes from the same revision as the bundle, with LF.
+            $content = & git.exe -C $repo show "$($installation.Revision):host/windows/$file"
+            if ($LASTEXITCODE -ne 0) { throw "Could not read $file from the recorded revision. No VM was created." }
+            [IO.File]::WriteAllText((Join-Path $payload $file), (($content -join "`n") + "`n"), $utf8)
+        }
         [IO.File]::WriteAllText($payloadReady, $installation.Revision, $utf8)
     }
     Write-Host "Using saved Workstation revision $($installation.Revision). New local changes are not part of this installation."
@@ -148,6 +194,7 @@ try {
         # Verify guest ownership before uploading files or running provisioning.
         & ssh.exe @sshOptions $target "test `"`$(cat /etc/workstation-bootstrap-id)`" = '$id' || exit 20; if test -f ~/$remote/complete && test `"`$(cat ~/$remote/complete)`" = '$($installation.Revision)'; then exit 0; else exit 10; fi"
         if ($LASTEXITCODE -eq 0) {
+            Complete-Account $guestAddress
             Save-Connection $guestAddress
             Write-Host "VM '$VMName' is already ready at $guestAddress (user $UserName)."
             return
@@ -161,6 +208,7 @@ try {
         }
         & ssh.exe @sshOptions $target "sh ~/$remote/provision-workstation.sh $id $($installation.Revision)"
         if ($LASTEXITCODE -ne 0) { throw 'Workstation provisioning did not finish. The VM and payload were preserved; rerun to resume.' }
+        Complete-Account $guestAddress
         Save-Connection $guestAddress
         Write-Host "VM '$VMName' is ready at $guestAddress (user $UserName)."
         return
@@ -207,7 +255,7 @@ try {
     }
     $variablesPath = Join-Path $build 'build.pkrvars.json'
     [IO.File]::WriteAllText($variablesPath, ($variables | ConvertTo-Json), $utf8)
-    $template = Join-Path $PSScriptRoot 'ubuntu.pkr.hcl'
+    $template = if ($installation.Schema -eq 2) { Join-Path $payload 'ubuntu.pkr.hcl' } else { Join-Path $PSScriptRoot 'ubuntu.pkr.hcl' }
     $packerPath = $packer.Source
     & $packerPath init $template
     if ($LASTEXITCODE -ne 0) { throw 'Packer plugin installation failed.' }
@@ -219,6 +267,8 @@ try {
     Start-VM -Name $VMName | Out-Null
     Remove-Item -LiteralPath (Join-Path $state 'output') -Recurse -Force
     Save-Connection
+    $connection = Get-Content -LiteralPath (Join-Path $state 'connection.json') -Raw | ConvertFrom-Json
+    Complete-Account $connection.Address
     Write-Host "VM '$VMName' is installed and starting. See docs/windows.md for the SSH alias."
 } finally {
     $env:PACKER_CACHE_DIR = $previousCache

@@ -53,6 +53,7 @@ source "hyperv-iso" "ubuntu" {
       autoinstall = {
         version = 1
         refresh-installer = { update = false }
+        updates = "security"
         locale = "en_US.UTF-8"
         keyboard = { layout = "us" }
         identity = { hostname = var.vm_name, username = var.username, password = "!" }

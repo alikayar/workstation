@@ -89,16 +89,23 @@
 
 - name: Add the user to the Docker group
   become: true
+  when: docker_add_user_to_group | bool
   ansible.builtin.user:
     name: "{{ workstation_user }}"
     groups: docker
     append: true
 
 - name: Remind the user to refresh the current shell  # noqa no-handler
+  when: docker_add_user_to_group | bool
   ansible.builtin.debug:
     msg: >-
       Docker setup complete. Run `newgrp docker` or start a new terminal if
       this shell does not yet recognize the docker group.
+
+- name: Explain privileged Docker access
+  ansible.builtin.debug:
+    msg: Docker is installed without root-equivalent docker group membership. Use sudo docker; unattended Docker-based agent tools require a separately approved access design.
+  when: not (docker_add_user_to_group | bool)
 
 - name: Enable and start Docker
   become: true

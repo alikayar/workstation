@@ -1,0 +1,173 @@
+---
+- name: Require Ubuntu systemd for the managed server security baseline
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['service_mgr'] == 'systemd'
+    fail_msg: Enable the server security baseline only on an Ubuntu systemd host.
+
+- name: Install server security components
+  become: true
+  ansible.builtin.apt:
+    name:
+      - openssh-server
+      - ufw
+      - apparmor
+      - unattended-upgrades
+      - libpam-pwquality
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Keep direct root password login locked
+  become: true
+  ansible.builtin.user:
+    name: root
+    password_lock: true
+
+- name: Enable normal user administration through sudo
+  become: true
+  ansible.builtin.user:
+    name: "{{ workstation_user }}"
+    groups: sudo
+    append: true
+
+- name: Configure SSH key authentication and development tunnels
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-workstation.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: /usr/sbin/sshd -t -f %s
+    content: |
+      # Workstation server baseline; leave cryptography to Ubuntu's maintained defaults.
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitEmptyPasswords no
+      AllowUsers {{ workstation_user }}
+      X11Forwarding no
+      AllowAgentForwarding no
+      AllowTcpForwarding local
+      PermitTunnel no
+      PermitUserEnvironment no
+      MaxAuthTries 3
+      LoginGraceTime 30
+  notify: Reload workstation SSH
+
+- name: Ensure password quality configuration directory exists
+  become: true
+  ansible.builtin.file:
+    path: /etc/security/pwquality.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Require long passwords including during bootstrap by root
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/security/pwquality.conf.d/90-workstation.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      minlen = 15
+      enforce_for_root
+
+- name: Enable daily security update checks
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+- name: Limit automatic upgrades to Ubuntu security updates without automatic reboot
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/99workstation-security
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      #clear Unattended-Upgrade::Allowed-Origins;
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::Automatic-Reboot "false";
+
+- name: Enable AppArmor
+  become: true
+  ansible.builtin.systemd_service:
+    name: apparmor
+    enabled: true
+    state: started
+
+- name: Configure firewall default policies
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: '^{{ item.key }}='
+    line: '{{ item.key }}="{{ item.value }}"'
+  loop:
+    - { key: DEFAULT_INPUT_POLICY, value: DROP }
+    - { key: DEFAULT_OUTPUT_POLICY, value: ACCEPT }
+    - { key: DEFAULT_FORWARD_POLICY, value: DROP }
+  notify: Reload workstation firewall
+
+- name: Allow SSH before enabling the firewall
+  become: true
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, allow, 22/tcp, comment, workstation-ssh]
+  environment:
+    LC_ALL: C
+  register: workstation_ufw_ssh
+  changed_when: "'Skipping' not in workstation_ufw_ssh.stdout"
+  when: not ansible_check_mode
+
+- name: Inspect firewall activation
+  become: true
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, status]
+  environment:
+    LC_ALL: C
+  register: workstation_ufw_status
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Enable firewall after installing the SSH rule
+  become: true
+  ansible.builtin.command:
+    argv: [/usr/sbin/ufw, --force, enable]
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - "'Status: active' not in workstation_ufw_status.stdout"
+
+- name: Apply SSH and firewall handlers before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Read effective SSH policy
+  become: true
+  ansible.builtin.command:
+    argv: [/usr/sbin/sshd, -T]
+  register: workstation_sshd_policy
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify effective SSH policy rather than only the snippet
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin no' in workstation_sshd_policy.stdout_lines"
+      - "'passwordauthentication no' in workstation_sshd_policy.stdout_lines"
+      - "'kbdinteractiveauthentication no' in workstation_sshd_policy.stdout_lines"
+      - "'pubkeyauthentication yes' in workstation_sshd_policy.stdout_lines"
+      - "('allowusers ' ~ workstation_user) in workstation_sshd_policy.stdout_lines"
+  when: not ansible_check_mode

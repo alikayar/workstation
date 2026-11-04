@@ -14,6 +14,7 @@ $state = Join-Path $env:LOCALAPPDATA 'Workstation'
 $inputsPath = Join-Path $state 'setup.json'
 $vmState = Join-Path $state 'HyperV\workstation'
 $utf8 = New-Object Text.UTF8Encoding($false)
+. "$PSScriptRoot\host\windows\VM-Resources.ps1"
 
 if ($Elevated) {
     try {
@@ -50,7 +51,7 @@ if ($Elevated) {
             & ssh-keygen.exe -lf $fingerprint
             if ($LASTEXITCODE -ne 0) { throw 'The saved public host key could not be read.' }
         }
-        & "$PSScriptRoot\host\windows\New-WorkstationVM.ps1" -GitName $inputs.GitName -GitEmail $inputs.GitEmail -PublicKeyPath $publicKey
+        & "$PSScriptRoot\host\windows\New-WorkstationVM.ps1" -GitName $inputs.GitName -GitEmail $inputs.GitEmail -PublicKeyPath $publicKey -CPUs $inputs.Resources.CPUs -MemoryMB $inputs.Resources.MemoryMB -DiskGB $inputs.Resources.DiskGB
         exit 0
     } catch {
         Write-Host $_ -ForegroundColor Red
@@ -59,6 +60,22 @@ if ($Elevated) {
     }
 }
 if ($isAdministrator) { throw 'Start .\setup.ps1 in a normal PowerShell window. It requests elevation when needed.' }
+$resources = Get-WorkstationVMResources
+if (Test-Path -LiteralPath $inputsPath) {
+    $savedInputs = Get-Content -LiteralPath $inputsPath -Raw | ConvertFrom-Json
+    if ($savedInputs.PSObject.Properties.Name -contains 'Resources') {
+        foreach ($entry in @(@{ Name = 'CPUs'; Env = 'WORKSTATION_VM_CPUS' }, @{ Name = 'MemoryMB'; Env = 'WORKSTATION_VM_MEMORY_MB' }, @{ Name = 'DiskGB'; Env = 'WORKSTATION_VM_DISK_GB' })) {
+            if ([Environment]::GetEnvironmentVariable($entry.Env, 'Process') -and
+                $resources.($entry.Name) -ne $savedInputs.Resources.($entry.Name)) {
+                throw "$($entry.Env) differs from the saved installation. Setup does not resize existing VMs."
+            }
+        }
+        $resources = $savedInputs.Resources
+    } else {
+        $savedInputs | Add-Member -NotePropertyName Resources -NotePropertyValue $resources
+        [IO.File]::WriteAllText($inputsPath, ($savedInputs | ConvertTo-Json -Depth 4), $utf8)
+    }
+}
 if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) { throw 'Install Git for Windows, reopen PowerShell and run setup again.' }
 & "$PSScriptRoot\host\windows\Install-Host.ps1"
 
@@ -76,18 +93,29 @@ if (-not (Test-Path -LiteralPath $inputsPath)) {
         $existing = Get-Content -LiteralPath $existingInstallation -Raw | ConvertFrom-Json
         $name = $existing.GitName
         $email = $existing.GitEmail
+        if ($existing.Schema -eq 2) {
+            foreach ($entry in @(@{ Name = 'CPUs'; Env = 'WORKSTATION_VM_CPUS' }, @{ Name = 'MemoryMB'; Env = 'WORKSTATION_VM_MEMORY_MB' }, @{ Name = 'DiskGB'; Env = 'WORKSTATION_VM_DISK_GB' })) {
+                if ([Environment]::GetEnvironmentVariable($entry.Env, 'Process') -and
+                    $resources.($entry.Name) -ne $existing.Resources.($entry.Name)) {
+                    throw "$($entry.Env) differs from the saved VM installation. Setup does not resize existing VMs."
+                }
+            }
+            $resources = $existing.Resources
+        }
     }
     $inputs = @{
         GitName = Read-SetupValue 'Git name' $name
         GitEmail = Read-SetupValue 'Git email' $email
         PublicKeyPath = Read-SetupValue 'SSH public key (.pub; created if missing)' "$env:USERPROFILE\.ssh\workstation_ed25519.pub"
+        Resources = $resources
     }
     $inputs.PublicKeyPath = [IO.Path]::GetFullPath($inputs.PublicKeyPath)
     if ([IO.Path]::GetExtension($inputs.PublicKeyPath) -ne '.pub') { throw 'Choose a public key path ending in .pub.' }
     New-Item -ItemType Directory -Path $state -Force | Out-Null
-    [IO.File]::WriteAllText($inputsPath, ($inputs | ConvertTo-Json), $utf8)
+    [IO.File]::WriteAllText($inputsPath, ($inputs | ConvertTo-Json -Depth 4), $utf8)
 }
 Write-Host 'Windows will ask for administrator access to prepare SSH, Hyper-V and Ubuntu. Use this same account.'
+Write-Host "VM resources: $($resources.CPUs) vCPUs, $($resources.MemoryMB) MiB RAM, $($resources.DiskGB) GiB disk. Existing VMs are not resized."
 $windowsPowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $arguments = '-NoLogo -NoProfile -File "' + $PSCommandPath + '" -Elevated -ExpectedSid ' + $identity.User.Value
 $process = Start-Process -FilePath $windowsPowerShell -ArgumentList $arguments -Verb RunAs -Wait -PassThru
