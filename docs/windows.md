@@ -97,6 +97,8 @@ Packer uses a temporary HTTP endpoint bound to the Hyper-V adapter for installat
 
 For custom VM sizes, switch names or usernames, use `host/windows/New-WorkstationVM.ps1` directly as described by its parameters. The short setup flow deliberately uses the defaults. VMs created manually or by an older bootstrap without an ownership record are not adopted automatically.
 
+Isolated trials can pass `-KnownHostsFile` to keep their SSH host-key records separate from the user's normal `known_hosts`; strict host-key checking remains enabled.
+
 ## Windows trial status
 
 This workflow has not yet been run end to end on Windows. During the first trial, confirm both terminal profiles, SSH and Remote - SSH access, reboot recovery, interrupted Ansible recovery, and a repeated run that reuses the VM without provisioning it again. An unrelated VM or SSH alias must remain untouched.

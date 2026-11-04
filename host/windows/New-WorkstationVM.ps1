@@ -8,6 +8,7 @@ param(
     [ValidatePattern('^[a-z][a-z0-9-]{0,48}[a-z0-9]$')][string]$VMName = 'workstation',
     [ValidatePattern('^[a-z][a-z0-9_]{0,30}$')][string]$UserName = 'dev',
     [string]$IdentityFile,
+    [ValidatePattern('^[^"\r\n]+$')][string]$KnownHostsFile,
     [string]$SwitchName = 'Default Switch',
     [ValidateRange(2, 64)][int]$CPUs = 4,
     [ValidateRange(4096, 131072)][int]$MemoryMB = 8192,
@@ -77,7 +78,9 @@ function Complete-Account([string]$Address) {
     } while ($true)
     $key = $IdentityFile
     if (-not $key) { $key = $PublicKeyPath.Substring(0, $PublicKeyPath.Length - 4) }
-    & (Join-Path $PSScriptRoot 'Set-GuestAccount.ps1') -Address $Address -UserName $UserName -IdentityFile $key -InstallationId $installation.Id -FinalizerPath (Join-Path $payload 'finalize-account.sh')
+    $account = @{ Address = $Address; UserName = $UserName; IdentityFile = $key; InstallationId = $installation.Id; FinalizerPath = (Join-Path $payload 'finalize-account.sh') }
+    if ($KnownHostsFile) { $account.KnownHostsFile = $KnownHostsFile }
+    & (Join-Path $PSScriptRoot 'Set-GuestAccount.ps1') @account
 }
 $utf8 = New-Object Text.UTF8Encoding($false)
 $vm = Get-VM -Name $VMName -ErrorAction SilentlyContinue
@@ -188,6 +191,7 @@ try {
         if (-not $guestAddress) { throw 'Ubuntu SSH is not ready after 10 minutes. Inspect the installer in Hyper-V Manager; the disk was preserved.' }
         if (-not $IdentityFile) { $IdentityFile = $PublicKeyPath.Substring(0, $PublicKeyPath.Length - 4) }
         $sshOptions = @('-i', $IdentityFile, '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=ask', '-o', 'ConnectTimeout=15')
+        if ($KnownHostsFile) { $sshOptions += @('-o', ('UserKnownHostsFile="' + [IO.Path]::GetFullPath($KnownHostsFile).Replace('\', '/') + '"')) }
         $target = "$UserName@$guestAddress"
         $id = $installation.Id
         $remote = ".local/state/workstation-bootstrap/$id"
