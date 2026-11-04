@@ -9,6 +9,9 @@ param(
     [ValidatePattern('^[a-z][a-z0-9_]{0,30}$')][string]$UserName = 'dev',
     [string]$IdentityFile,
     [ValidatePattern('^[^"\r\n]+$')][string]$KnownHostsFile,
+    [switch]$TemplateBuild,
+    [string]$PreparedPayload,
+    [string]$TrustedPackerPath,
     [string]$SwitchName = 'Default Switch',
     [ValidateRange(2, 64)][int]$CPUs = 4,
     [ValidateRange(4096, 131072)][int]$MemoryMB = 8192,
@@ -37,7 +40,10 @@ if ($feature.State -ne 'Enabled') {
     return
 }
 Import-Module Hyper-V
-foreach ($tool in @('git.exe', 'ssh.exe', 'scp.exe', 'ssh-keygen.exe')) {
+$sshExe = Join-Path ([Environment]::SystemDirectory) 'OpenSSH\ssh.exe'
+$scpExe = Join-Path ([Environment]::SystemDirectory) 'OpenSSH\scp.exe'
+$keygenExe = Join-Path ([Environment]::SystemDirectory) 'OpenSSH\ssh-keygen.exe'
+foreach ($tool in @($sshExe, $scpExe, $keygenExe)) {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Required on the host: $tool" }
 }
 if ([IO.Path]::GetExtension($PublicKeyPath) -ne '.pub') { throw 'Select the public key file ending in .pub.' }
@@ -46,7 +52,9 @@ if ($publicKey -notmatch '^(ssh-ed25519|ssh-rsa) ([A-Za-z0-9+/]+={0,3})(?: [^\r\
     throw 'Provide a single OpenSSH RSA or Ed25519 public key (.pub), never a private key.'
 }
 $publicKey = "$($Matches[1]) $($Matches[2])"
-$repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$repo = if (-not $PreparedPayload) { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path } else { $null }
+$frozen = if ($PreparedPayload) { Get-Content -LiteralPath (Join-Path $PreparedPayload 'repository.json') -Raw | ConvertFrom-Json } else { $null }
+if ($PreparedPayload -and ($frozen.Revision -notmatch '^[a-f0-9]{40,64}$' -or $frozen.Branch -notmatch '^[a-zA-Z0-9_][a-zA-Z0-9_./-]*$')) { throw 'Invalid prepared repository metadata.' }
 $state = Join-Path ([IO.Path]::GetFullPath($StateRoot)) $VMName
 $manifestPath = Join-Path $state 'installation.json'
 function Save-Connection([string]$Address) {
@@ -64,8 +72,9 @@ function Save-Connection([string]$Address) {
     [IO.File]::WriteAllText((Join-Path $state 'connection.json'), $json, [Text.UTF8Encoding]::new($false))
 }
 function Complete-Account([string]$Address) {
+    # Image builders are sealed immediately instead of creating a reusable user password.
     # Legacy installations retain their original provisioning policy.
-    if ($installation.Schema -lt 2) { return }
+    if ($TemplateBuild -or $installation.Schema -lt 2) { return }
     $deadline = (Get-Date).AddMinutes(2)
     do {
         $client = New-Object Net.Sockets.TcpClient
@@ -80,7 +89,7 @@ function Complete-Account([string]$Address) {
     if (-not $key) { $key = $PublicKeyPath.Substring(0, $PublicKeyPath.Length - 4) }
     $account = @{ Address = $Address; UserName = $UserName; IdentityFile = $key; InstallationId = $installation.Id; FinalizerPath = (Join-Path $payload 'finalize-account.sh') }
     if ($KnownHostsFile) { $account.KnownHostsFile = $KnownHostsFile }
-    & (Join-Path $PSScriptRoot 'Set-GuestAccount.ps1') @account
+    & (Join-Path $PSScriptRoot 'guest\Set-GuestAccount.ps1') @account
 }
 $utf8 = New-Object Text.UTF8Encoding($false)
 $vm = Get-VM -Name $VMName -ErrorAction SilentlyContinue
@@ -90,7 +99,7 @@ if ($vm -and -not (Test-Path -LiteralPath $manifestPath)) {
 if ((Test-Path -LiteralPath $state) -and -not (Test-Path -LiteralPath $manifestPath)) {
     throw "Unrecognized state directory: $state. Inspect it before continuing."
 }
-if (-not (Test-Path -LiteralPath $manifestPath)) {
+if (-not $PreparedPayload -and -not (Test-Path -LiteralPath $manifestPath)) {
     $changes = & git.exe -C $repo status --porcelain
     if ($LASTEXITCODE -ne 0) { throw 'Run from a Git checkout of Workstation.' }
     if ($changes) { throw 'Commit or stash local changes before creating a new installation. Its recovery payload uses a committed revision.' }
@@ -98,7 +107,8 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
 if (-not (Test-Path -LiteralPath $state)) {
     New-Item -ItemType Directory -Path $state | Out-Null
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    & icacls.exe $state /inheritance:r /grant:r "*$($sid):(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+    $callerRights = if ($PreparedPayload) { "*$($sid):(OI)(CI)RX" } else { "*$($sid):(OI)(CI)F" }
+    & "$env:SystemRoot\System32\icacls.exe" $state /inheritance:r /grant:r $callerRights '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-83-0:(OI)(CI)RX' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not restrict permissions on the installation directory.' }
 }
 # Prevent two invocations from provisioning the same installation concurrently.
@@ -112,6 +122,8 @@ try {
         if ($installation.Schema -notin @(1, 2) -or $installation.Id -notmatch '^[a-f0-9]{32}$' -or $installation.Revision -notmatch '^[a-f0-9]{40,64}$') {
             throw 'Invalid Workstation installation record; inspect it before continuing.'
         }
+        $isBuilder = ($installation.PSObject.Properties.Name -contains 'Purpose') -and $installation.Purpose -eq 'TemplateBuilder'
+        if ([bool]$TemplateBuild -ne [bool]$isBuilder) { throw 'Use the original installation mode. Normal VMs cannot be adopted as image builders.' }
         if ($installation.UserName -ne $UserName -or $installation.PublicKey -ne $publicKey -or $installation.GitName -ne $GitName -or $installation.GitEmail -ne $GitEmail) {
             throw 'Resume with the original username, public key and Git identity. Manage changes inside the prepared VM.'
         }
@@ -126,12 +138,16 @@ try {
             throw 'Resource sizes differ from the saved installation. Resume with its original settings; setup does not resize existing VMs.'
         }
     } else {
-        $revision = & git.exe -C $repo rev-parse HEAD
-        if ($LASTEXITCODE -ne 0) { throw 'Run from a Git checkout of Workstation.' }
-        $branch = & git.exe -C $repo symbolic-ref --short HEAD
-        if ($LASTEXITCODE -ne 0) { throw 'Check out a branch before preparing the VM payload.' }
+        if ($PreparedPayload) { $revision = $frozen.Revision; $branch = $frozen.Branch }
+        else {
+            $revision = & git.exe -C $repo rev-parse HEAD
+            if ($LASTEXITCODE -ne 0) { throw 'Run from a Git checkout of Workstation.' }
+            $branch = & git.exe -C $repo symbolic-ref --short HEAD
+            if ($LASTEXITCODE -ne 0) { throw 'Check out a branch before preparing the VM payload.' }
+        }
         $installation = [pscustomobject]@{
             Schema = 2; Id = [Guid]::NewGuid().ToString('N'); Revision = $revision; Branch = $branch
+            Purpose = $(if ($TemplateBuild) { 'TemplateBuilder' } else { 'Workstation' })
             UserName = $UserName; PublicKey = $publicKey; GitName = $GitName; GitEmail = $GitEmail
             Resources = @{ CPUs = $CPUs; MemoryMB = $MemoryMB; DiskGB = $DiskGB }
         }
@@ -143,11 +159,16 @@ try {
     if (-not (Test-Path -LiteralPath $payloadReady)) {
         if ($vm) { throw 'The saved provisioning payload is incomplete. Inspect the installation directory.' }
         New-Item -ItemType Directory -Path $payload -Force | Out-Null
-        $current = & git.exe -C $repo rev-parse HEAD
-        if ($LASTEXITCODE -ne 0 -or $current -ne $installation.Revision) { throw 'Restore the recorded checkout revision before preparing the interrupted payload.' }
-        & git.exe -C $repo bundle create "$bundle.tmp" HEAD $installation.Branch
-        if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the saved repository revision.' }
-        Move-Item -LiteralPath "$bundle.tmp" -Destination $bundle -Force
+        if ($PreparedPayload) {
+            if ($frozen.Revision -cne $installation.Revision) { throw 'The installed package differs from the interrupted builder. Resume using its original package.' }
+            Copy-Item -LiteralPath (Join-Path $PreparedPayload 'workstation.bundle') -Destination $bundle -Force
+        } else {
+            $current = & git.exe -C $repo rev-parse HEAD
+            if ($LASTEXITCODE -ne 0 -or $current -ne $installation.Revision) { throw 'Restore the recorded checkout revision before preparing the interrupted payload.' }
+            & git.exe -C $repo bundle create "$bundle.tmp" HEAD $installation.Branch
+            if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the saved repository revision.' }
+            Move-Item -LiteralPath "$bundle.tmp" -Destination $bundle -Force
+        }
         $vars = @{ git_user_name = $GitName; git_user_email = $GitEmail }
         if ($installation.Schema -eq 2) {
             $vars.workstation_security_enabled = $true
@@ -156,11 +177,29 @@ try {
         [IO.File]::WriteAllText((Join-Path $payload 'workstation-vars.json'), ($vars | ConvertTo-Json), $utf8)
         $files = @('provision-workstation.sh')
         if ($installation.Schema -eq 2) { $files += @('finalize-account.sh', 'ubuntu.pkr.hcl') }
+        $sourcePaths = @{
+            'provision-workstation.sh' = 'host/windows/hyperv/guest/provision-workstation.sh'
+            'finalize-account.sh' = 'host/windows/hyperv/guest/finalize-account.sh'
+            'ubuntu.pkr.hcl' = 'host/windows/hyperv/ubuntu.pkr.hcl'
+        }
         foreach ($file in $files) {
-            # Every recovery program comes from the same revision as the bundle, with LF.
-            $content = & git.exe -C $repo show "$($installation.Revision):host/windows/$file"
-            if ($LASTEXITCODE -ne 0) { throw "Could not read $file from the recorded revision. No VM was created." }
-            [IO.File]::WriteAllText((Join-Path $payload $file), (($content -join "`n") + "`n"), $utf8)
+            if ($PreparedPayload) {
+                Copy-Item -LiteralPath (Join-Path $PreparedPayload $file) -Destination (Join-Path $payload $file) -Force
+            } else {
+                # Read the recorded revision, including installations from the earlier flat layout.
+                $sourcePath = $sourcePaths[$file]
+                $legacyPath = "host/windows/$file"
+                $recordedPaths = @(& git.exe -C $repo ls-tree -r --name-only $installation.Revision -- $sourcePath $legacyPath)
+                if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the recorded revision. No VM was created.' }
+                if ($recordedPaths -notcontains $sourcePath) {
+                    if ($recordedPaths -notcontains $legacyPath) { throw "Could not find $file in the recorded revision. No VM was created." }
+                    $sourcePath = $legacyPath
+                }
+                $content = & git.exe -C $repo show "$($installation.Revision):$sourcePath"
+                if ($LASTEXITCODE -ne 0) { throw "Could not read $file from the recorded revision. No VM was created." }
+                # Keep payload filenames and LF line endings stable for guest recovery.
+                [IO.File]::WriteAllText((Join-Path $payload $file), (($content -join "`n") + "`n"), $utf8)
+            }
         }
         [IO.File]::WriteAllText($payloadReady, $installation.Revision, $utf8)
     }
@@ -190,13 +229,13 @@ try {
         } until ($guestAddress -or (Get-Date) -ge $deadline)
         if (-not $guestAddress) { throw 'Ubuntu SSH is not ready after 10 minutes. Inspect the installer in Hyper-V Manager; the disk was preserved.' }
         if (-not $IdentityFile) { $IdentityFile = $PublicKeyPath.Substring(0, $PublicKeyPath.Length - 4) }
-        $sshOptions = @('-i', $IdentityFile, '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=ask', '-o', 'ConnectTimeout=15')
+        $sshOptions = @('-F', 'NUL', '-o', 'IdentityAgent=none', '-o', 'ForwardAgent=no', '-o', 'PermitLocalCommand=no', '-o', 'ClearAllForwardings=yes', '-i', $IdentityFile, '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=ask', '-o', 'ConnectTimeout=15')
         if ($KnownHostsFile) { $sshOptions += @('-o', ('UserKnownHostsFile="' + [IO.Path]::GetFullPath($KnownHostsFile).Replace('\', '/') + '"')) }
         $target = "$UserName@$guestAddress"
         $id = $installation.Id
         $remote = ".local/state/workstation-bootstrap/$id"
         # Verify guest ownership before uploading files or running provisioning.
-        & ssh.exe @sshOptions $target "test `"`$(cat /etc/workstation-bootstrap-id)`" = '$id' || exit 20; if test -f ~/$remote/complete && test `"`$(cat ~/$remote/complete)`" = '$($installation.Revision)'; then exit 0; else exit 10; fi"
+        & $sshExe @sshOptions $target "test `"`$(cat /etc/workstation-bootstrap-id)`" = '$id' || exit 20; if test -f ~/$remote/complete && test `"`$(cat ~/$remote/complete)`" = '$($installation.Revision)'; then exit 0; else exit 10; fi"
         if ($LASTEXITCODE -eq 0) {
             Complete-Account $guestAddress
             Save-Connection $guestAddress
@@ -204,13 +243,13 @@ try {
             return
         }
         if ($LASTEXITCODE -ne 10) { throw 'Guest identity or SSH authentication could not be confirmed. No provisioning was attempted.' }
-        & ssh.exe @sshOptions $target "mkdir -p ~/$remote"
+        & $sshExe @sshOptions $target "mkdir -p ~/$remote"
         if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the guest payload directory.' }
         foreach ($file in @('workstation.bundle', 'workstation-vars.json', 'provision-workstation.sh', 'bootstrap-key.pub')) {
-            & scp.exe @sshOptions (Join-Path $payload $file) "${target}:$remote/$file"
+            & $scpExe @sshOptions (Join-Path $payload $file) "${target}:$remote/$file"
             if ($LASTEXITCODE -ne 0) { throw "Could not upload $file. Rerun the command to resume." }
         }
-        & ssh.exe @sshOptions $target "sh ~/$remote/provision-workstation.sh $id $($installation.Revision)"
+        & $sshExe @sshOptions $target "sh ~/$remote/provision-workstation.sh $id $($installation.Revision)"
         if ($LASTEXITCODE -ne 0) { throw 'Workstation provisioning did not finish. The VM and payload were preserved; rerun to resume.' }
         Complete-Account $guestAddress
         Save-Connection $guestAddress
@@ -230,18 +269,23 @@ try {
     $hostAddress = $addresses[0].IPAddress
     $env:PACKER_CACHE_DIR = Join-Path $state 'cache'
     New-Item -ItemType Directory -Path $machines, $env:PACKER_CACHE_DIR -Force | Out-Null
-    $packer = Get-Command packer.exe -ErrorAction SilentlyContinue
-    if (-not $packer) {
-        & winget.exe install --id Hashicorp.Packer --exact --source winget --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
-        if ($LASTEXITCODE -ne 0) { throw "Packer installation failed (exit $LASTEXITCODE)." }
-        $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
-        $packer = Get-Command packer.exe -ErrorAction Stop
+    if ($PreparedPayload) {
+        if (-not $TrustedPackerPath -or -not (Test-Path -LiteralPath $TrustedPackerPath)) { throw 'Protected Packer executable is missing. Rerun host setup.' }
+        $packer = [pscustomobject]@{ Source = $TrustedPackerPath }
+    } else {
+        $packer = Get-Command packer.exe -ErrorAction SilentlyContinue
+        if (-not $packer) {
+            & winget.exe install --id Hashicorp.Packer --exact --source winget --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -ne 0) { throw "Packer installation failed (exit $LASTEXITCODE)." }
+            $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+            $packer = Get-Command packer.exe -ErrorAction Stop
+        }
     }
     $build = Join-Path $state ("bootstrap-" + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $build | Out-Null
     $keyPath = Join-Path $build 'bootstrap-key'
     $start = New-Object Diagnostics.ProcessStartInfo
-    $start.FileName = (Get-Command ssh-keygen.exe).Source
+    $start.FileName = $keygenExe
     $start.Arguments = '-q -t ed25519 -N "" -f "' + $keyPath + '"'
     $start.UseShellExecute = $false
     $process = [Diagnostics.Process]::Start($start)

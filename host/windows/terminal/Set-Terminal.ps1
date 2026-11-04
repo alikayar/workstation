@@ -27,7 +27,7 @@ function Write-ChangedText([string]$Path, [string]$Content) {
     [IO.File]::WriteAllText($temporary, $Content, [Text.UTF8Encoding]::new($false))
     Move-Item -LiteralPath $temporary -Destination $Path -Force
 }
-$source = Join-Path $PSScriptRoot '..\..\dotfiles\starship\starship.toml'
+$source = Join-Path $PSScriptRoot '..\..\..\dotfiles\starship\starship.toml'
 $prompt = [IO.File]::ReadAllText($source)
 # Share the VM layout; a permanent host label makes local commands easy to distinguish.
 $prompt += @'

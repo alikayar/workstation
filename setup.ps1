@@ -14,7 +14,7 @@ $state = Join-Path $env:LOCALAPPDATA 'Workstation'
 $inputsPath = Join-Path $state 'setup.json'
 $vmState = Join-Path $state 'HyperV\workstation'
 $utf8 = New-Object Text.UTF8Encoding($false)
-. "$PSScriptRoot\host\windows\VM-Resources.ps1"
+. "$PSScriptRoot\host\windows\hyperv\VM-Resources.ps1"
 
 function Save-SetupInputs([object]$Answers) {
     New-Item -ItemType Directory -Path $state -Force | Out-Null
@@ -87,7 +87,7 @@ if ($Elevated) {
             & ssh-keygen.exe -lf $fingerprint
             if ($LASTEXITCODE -ne 0) { throw 'The saved public host key could not be read.' }
         }
-        & "$PSScriptRoot\host\windows\New-WorkstationVM.ps1" -GitName $inputs.GitName -GitEmail $inputs.GitEmail -PublicKeyPath $publicKey -CPUs $inputs.Resources.CPUs -MemoryMB $inputs.Resources.MemoryMB -DiskGB $inputs.Resources.DiskGB
+        & "$PSScriptRoot\host\windows\hyperv\New-WorkstationVM.ps1" -GitName $inputs.GitName -GitEmail $inputs.GitEmail -PublicKeyPath $publicKey -CPUs $inputs.Resources.CPUs -MemoryMB $inputs.Resources.MemoryMB -DiskGB $inputs.Resources.DiskGB
         exit 0
     } catch {
         Write-Host $_ -ForegroundColor Red

@@ -28,13 +28,6 @@ if (-not $code) {
 } else { $codePath = $code.Source }
 if (-not (Test-Path -LiteralPath $codePath)) { throw 'VS Code CLI was not found after installation.' }
 
-$installed = @(& $codePath --list-extensions)
-if ($LASTEXITCODE -ne 0) { throw 'Could not read the VS Code extension list.' }
-# Connection tooling belongs on the host. Language extensions belong to each remote project.
-if ($installed -notcontains 'ms-vscode-remote.remote-ssh') {
-    & $codePath --install-extension ms-vscode-remote.remote-ssh
-    if ($LASTEXITCODE -ne 0) { throw 'Remote - SSH installation failed.' }
-}
 foreach ($package in @(
     @{ Id = 'Microsoft.WindowsTerminal'; Command = 'wt.exe' },
     @{ Id = 'Microsoft.PowerShell'; Command = 'pwsh.exe' },
@@ -49,8 +42,13 @@ foreach ($package in @(
         }
     }
 }
+if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Workstation\setup.json')) {
+    & (Join-Path $PSScriptRoot 'Install-VMCommands.ps1') -CodePath $codePath
+} else {
+    Write-Host 'Run setup.ps1 to choose VM defaults and install the protected wvm commands.'
+}
 $pwshPath = (Get-Command pwsh.exe).Source
 $starshipPath = (Get-Command starship.exe -CommandType Application -ErrorAction Stop).Source
-& $pwshPath -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'Set-Terminal.ps1') -StarshipPath $starshipPath
+& $pwshPath -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'terminal\Set-Terminal.ps1') -StarshipPath $starshipPath
 if ($LASTEXITCODE -ne 0) { throw 'Terminal configuration did not finish. Rerun after resolving the reported error.' }
-Write-Host 'VS Code, Remote - SSH and the Workstation terminal profiles are ready.'
+Write-Host 'VS Code and the Workstation terminal profiles are ready. The isolated editor installs Remote - SSH on first wvm open.'

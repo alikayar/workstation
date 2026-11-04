@@ -1,4 +1,8 @@
 # Loaded only by the Workstation Terminal profiles, not by agent or provisioning commands.
+$vmCommands = Join-Path $PSScriptRoot '..\Commands\hyperv\commands\Shell-Commands.ps1'
+if ((Test-Path -LiteralPath $vmCommands) -and -not (Get-Command wvm -ErrorAction SilentlyContinue)) {
+    . $vmCommands
+}
 $runtime = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'runtime.json') -Raw -ErrorAction Stop | ConvertFrom-Json
 $starshipPath = $runtime.StarshipPath
 $env:STARSHIP_CONFIG = Join-Path $PSScriptRoot 'starship.toml'
