@@ -46,7 +46,7 @@ On the first SSH connection, compare its host-key fingerprint with the value pri
 | --- | --- |
 | `host/windows/hyperv/windows-pro/` | Standalone Windows Pro VM command, media download, unattended setup and answer template |
 | `host/windows/Install-Host.ps1` | Install host applications and invoke terminal setup |
-| `host/windows/terminal/` | Terminal profiles, startup script and Slate Glass palette |
+| `host/windows/terminal/` | Standalone dependency installation, PowerShell configuration, Terminal profiles and font/theme |
 | `host/windows/hyperv/` | VM bootstrap, resource inputs and Packer template |
 | `host/windows/hyperv/commands/` | Temporary VM commands, ownership checks, image factory and seed ISO |
 | `host/windows/hyperv/guest/` | SSH account finalization and Ubuntu bootstrap payload scripts |
@@ -187,7 +187,19 @@ Docker-published ports can bypass UFW's normal input filtering. Bind development
 
 Installed applications are reused. The terminal configuration is a separate [JSON fragment](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions), so existing Terminal settings and PowerShell profiles remain intact. Dedicated Workstation profiles load their own startup script. Choose your default profile under **Settings → Startup**, and Dark under **Appearance** if you want matching window chrome. User overrides for font and opacity take precedence over fragment defaults. Font changes may require reopening Terminal or signing out and back in.
 
-Setup records the resolved Starship executable in `%LOCALAPPDATA%\Workstation\Terminal\runtime.json`. Both PowerShell profiles initialize Starship using that absolute path, so a new Terminal tab can refresh its environment without losing the prompt. A portable or Sandbox installation can use `host/windows/terminal/Set-Terminal.ps1 -StarshipPath C:\path\to\starship.exe` after placing the executable at its final location. If Starship is moved or reinstalled elsewhere, rerun terminal setup to refresh the recorded path. Opening a terminal does not install applications or change persistent PATH settings.
+Terminal setup is self-contained. From a **normal PowerShell 5.1 or 7 window**, run:
+
+```powershell
+.\host\windows\terminal\Install-Terminal.ps1
+```
+
+`Install-Terminal.ps1` owns installation of **PowerShell 7, Windows Terminal and Starship** through the explicit WinGet package IDs and the `winget` source. Existing executables are reused without upgrading or reinstalling. App Installer/WinGet is needed only when a dependency is missing; the command reports how to obtain it if unavailable. The installer accepts the selected package/source agreements, and an individual package installer may request elevation. Process PATH is refreshed without changing persistent PATH. Failed installation or a still-missing executable stops before terminal configuration.
+
+After dependencies are available, `Install-Terminal.ps1` prepares the prompt, pinned Nerd Font, Slate Glass and Terminal profiles directly. `Install-Host.ps1` delegates terminal preparation to this same entry point. Running terminal installation alone does not install VS Code, Git, WSL, Hyper-V or `wvm`, and does not create VMs.
+
+There are two scripts under `host/windows/terminal/`: run `Install-Terminal.ps1` for installation and configuration; `PowerShell-Profile.ps1` is the runtime profile copied by the installer and loaded automatically in each new Workstation tab. The runtime loads Starship, available PSReadLine settings and an optional already-installed `wvm` shim. Configuration uses `%LOCALAPPDATA%\Workstation\Terminal`; existing `$PROFILE` files remain untouched. Console-only PSReadLine configuration is skipped with redirected input/output. No execution-policy change is made. Existing profile GUIDs, Slate Glass and 62% opacity are preserved. Setup makes Workstation the default in stable Windows Terminal settings, preserving comments and other settings and keeping the original settings in `settings.json.workstation-backup` before the first change.
+
+Setup records the resolved Starship executable in `%LOCALAPPDATA%\Workstation\Terminal\runtime.json`. Both PowerShell profiles initialize Starship using that absolute path, so a new Terminal tab can refresh its environment without losing the prompt. If Starship is moved or reinstalled elsewhere, rerun terminal setup to refresh the recorded path. Opening a terminal does not install applications or change persistent PATH settings.
 
 ## Reruns and recovery
 

@@ -28,27 +28,10 @@ if (-not $code) {
 } else { $codePath = $code.Source }
 if (-not (Test-Path -LiteralPath $codePath)) { throw 'VS Code CLI was not found after installation.' }
 
-foreach ($package in @(
-    @{ Id = 'Microsoft.WindowsTerminal'; Command = 'wt.exe' },
-    @{ Id = 'Microsoft.PowerShell'; Command = 'pwsh.exe' },
-    @{ Id = 'Starship.Starship'; Command = 'starship.exe' }
-)) {
-    if (-not (Get-Command $package.Command -ErrorAction SilentlyContinue)) {
-        & winget.exe install --id $package.Id --exact --source winget --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
-        if ($LASTEXITCODE -ne 0) { throw "Installation failed for $($package.Id) (exit $LASTEXITCODE)." }
-        $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + $env:Path
-        if (-not (Get-Command $package.Command -ErrorAction SilentlyContinue)) {
-            throw "$($package.Id) was installed but its command is not available. Reopen PowerShell and rerun this script."
-        }
-    }
-}
+& (Join-Path $PSScriptRoot 'terminal\Install-Terminal.ps1')
 if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Workstation\setup.json')) {
     & (Join-Path $PSScriptRoot 'Install-VMCommands.ps1') -CodePath $codePath
 } else {
     Write-Host 'Run setup.ps1 to choose VM defaults and install the protected wvm commands.'
 }
-$pwshPath = (Get-Command pwsh.exe).Source
-$starshipPath = (Get-Command starship.exe -CommandType Application -ErrorAction Stop).Source
-& $pwshPath -NoLogo -NoProfile -File (Join-Path $PSScriptRoot 'terminal\Set-Terminal.ps1') -StarshipPath $starshipPath
-if ($LASTEXITCODE -ne 0) { throw 'Terminal configuration did not finish. Rerun after resolving the reported error.' }
 Write-Host 'VS Code and the Workstation terminal profiles are ready. The isolated editor installs Remote - SSH on first wvm open.'

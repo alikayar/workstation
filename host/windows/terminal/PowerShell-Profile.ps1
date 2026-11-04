@@ -1,14 +1,17 @@
-# Loaded only by the Workstation Terminal profiles, not by agent or provisioning commands.
+#Requires -Version 5.1
+# Loaded explicitly by the Workstation profile or a standalone interactive shell.
 $vmCommands = Join-Path $PSScriptRoot '..\Commands\hyperv\commands\Shell-Commands.ps1'
 if ((Test-Path -LiteralPath $vmCommands) -and -not (Get-Command wvm -ErrorAction SilentlyContinue)) {
     . $vmCommands
 }
 $runtime = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'runtime.json') -Raw -ErrorAction Stop | ConvertFrom-Json
 $starshipPath = $runtime.StarshipPath
+if (-not $starshipPath -or -not (Test-Path -LiteralPath $starshipPath -PathType Leaf)) { throw 'Recorded Starship executable is missing. Rerun terminal/Install-Terminal.ps1 to refresh the recorded path.' }
 $env:STARSHIP_CONFIG = Join-Path $PSScriptRoot 'starship.toml'
-if (Get-Module -ListAvailable PSReadLine) {
+# PSReadLine requires a real console; redirected startup must not alter its key bindings.
+if (-not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and (Get-Module -ListAvailable PSReadLine)) {
     Import-Module PSReadLine
-    if (-not [Console]::IsOutputRedirected -and $Host.UI.SupportsVirtualTerminal -and
+    if ($Host.UI.SupportsVirtualTerminal -and
         (Get-Command Set-PSReadLineOption).Parameters.ContainsKey('PredictionSource')) {
         Set-PSReadLineOption -PredictionSource History
         if ((Get-Command Set-PSReadLineOption).Parameters.ContainsKey('PredictionViewStyle')) {
@@ -17,8 +20,7 @@ if (Get-Module -ListAvailable PSReadLine) {
     }
     Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
 }
-# Use the executable selected by setup. Terminal may refresh PATH when opening
-# a tab, so discovery here would lose portable or newly installed applications.
+# A new Terminal tab can rebuild PATH; use the executable selected during setup.
 $starshipInit = & $starshipPath init powershell --print-full-init
 if ($LASTEXITCODE -ne 0) { throw "Starship initialization failed (exit $LASTEXITCODE)." }
 Invoke-Expression ($starshipInit | Out-String)
