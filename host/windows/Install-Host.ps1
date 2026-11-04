@@ -29,9 +29,4 @@ if (-not $code) {
 if (-not (Test-Path -LiteralPath $codePath)) { throw 'VS Code CLI was not found after installation.' }
 
 & (Join-Path $PSScriptRoot 'terminal\Install-Terminal.ps1')
-if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Workstation\setup.json')) {
-    & (Join-Path $PSScriptRoot 'Install-VMCommands.ps1') -CodePath $codePath
-} else {
-    Write-Host 'Run setup.ps1 to choose VM defaults and install the protected wvm commands.'
-}
-Write-Host 'VS Code and the Workstation terminal profiles are ready. The isolated editor installs Remote - SSH on first wvm open.'
+Write-Host 'VS Code and the Workstation terminal profiles are ready.'

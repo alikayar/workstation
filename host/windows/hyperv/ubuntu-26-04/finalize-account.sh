@@ -1,5 +1,5 @@
 #!/bin/sh
-# Invoked over authenticated SSH as root. passwd owns the hidden password prompt.
+# Ubuntu account finalization over authenticated SSH; passwd owns the hidden prompt.
 set -eu
 set +x
 umask 077

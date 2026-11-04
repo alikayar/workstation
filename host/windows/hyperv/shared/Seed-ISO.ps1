@@ -1,4 +1,4 @@
-# No external ISO utility or Windows ADK installation is required.
+# Shared ISO creation without an external utility or Windows ADK installation.
 function New-VMSeedISO([string]$Directory, [string]$Destination) {
     if (-not ('WorkstationImageStream' -as [type])) {
         Add-Type @'

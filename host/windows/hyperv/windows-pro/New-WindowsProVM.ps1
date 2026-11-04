@@ -49,7 +49,7 @@ if ([int](Get-CimInstance Win32_OperatingSystem).BuildNumber -lt 22000) { throw 
 if ((Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All).State -ne 'Enabled') {
     throw 'Enable Hyper-V in Windows Features and restart Windows, then rerun. This script does not enable host features or reboot.'
 }
-. (Join-Path $PSScriptRoot '..\VM-Resources.ps1')
+. (Join-Path $PSScriptRoot '..\shared\VM-Resources.ps1')
 function Read-WindowsVMValue([string]$Label, [object]$Default, [scriptblock]$Validate) {
     while ($true) {
         $answer = Read-Host "$Label [$Default]"
@@ -69,7 +69,7 @@ Import-Module Hyper-V
 Import-Module Dism
 . (Join-Path $PSScriptRoot 'Windows-Media.ps1')
 . (Join-Path $PSScriptRoot 'Windows-Unattend.ps1')
-. (Join-Path $PSScriptRoot '..\commands\Seed-ISO.ps1')
+. (Join-Path $PSScriptRoot '..\shared\Seed-ISO.ps1')
 if ($VMRoot -notmatch '^[a-zA-Z]:[\\/]') { throw 'VMRoot must be an absolute local drive path, such as D:\VMs.' }
 $VMRoot = [IO.Path]::GetFullPath($VMRoot).TrimEnd('\')
 $root = Join-Path $VMRoot $VMName

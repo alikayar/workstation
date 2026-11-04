@@ -47,7 +47,7 @@ jobs:
           ansible-playbook ansible/site.yml | tee "${RUNNER_TEMP}/workstation-second-run.log"
           grep -Eq '^localhost[[:space:]]*:[[:space:]]+ok=[0-9]+[[:space:]]+changed=0([[:space:]]|$)' "${RUNNER_TEMP}/workstation-second-run.log"
 
-  windows-state:
+  windows-powershell:
     runs-on: windows-latest
     timeout-minutes: 10
     strategy:
@@ -62,13 +62,10 @@ jobs:
         shell: ${{ matrix.shell }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $files = @(Get-Item setup.ps1) + @(Get-ChildItem host/windows -Filter '*.ps1' -Recurse)
+          $files = @(Get-ChildItem host/windows -Filter '*.ps1' -Recurse)
           foreach ($file in $files) {
             $tokens = $null
             $parseErrors = $null
             $null = [Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors) { throw "$($file.FullName): $($parseErrors[0].Message)" }
           }
-      - name: Check filesystem recovery and SSH host identity
-        shell: ${{ matrix.shell }}
-        run: ./tests/windows/Test-VMState.ps1

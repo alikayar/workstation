@@ -1,9 +1,5 @@
 #Requires -Version 5.1
 # Loaded explicitly by the Workstation profile or a standalone interactive shell.
-$vmCommands = Join-Path $PSScriptRoot '..\Commands\hyperv\commands\Shell-Commands.ps1'
-if ((Test-Path -LiteralPath $vmCommands) -and -not (Get-Command wvm -ErrorAction SilentlyContinue)) {
-    . $vmCommands
-}
 $runtime = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'runtime.json') -Raw -ErrorAction Stop | ConvertFrom-Json
 $starshipPath = $runtime.StarshipPath
 if (-not $starshipPath -or -not (Test-Path -LiteralPath $starshipPath -PathType Leaf)) { throw 'Recorded Starship executable is missing. Rerun terminal/Install-Terminal.ps1 to refresh the recorded path.' }

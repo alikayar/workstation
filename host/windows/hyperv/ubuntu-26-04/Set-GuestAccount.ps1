@@ -19,14 +19,14 @@ if ($KnownHostsFile) {
     $options += @('-o', ('UserKnownHostsFile="' + [IO.Path]::GetFullPath($KnownHostsFile).Replace('\', '/') + '"'))
 }
 $target = "$UserName@$Address"
-if ($WaitForCloudInit) {
-    & $ssh @options $target '/usr/bin/timeout 180 cloud-init status --wait >/dev/null'
-    if ($LASTEXITCODE -ne 0) { throw 'First-boot cloud-init did not finish. The VM was preserved; retry wvm open after inspecting its console.' }
-}
 # Verify guest ownership and SSH host identity before prompting or uploading.
 & $ssh @options $target "test `"`$(cat /etc/workstation-bootstrap-id)`" = '$InstallationId' || exit 20; if test `"`$(cat /var/lib/workstation/account-ready 2>/dev/null)`" = '$InstallationId' && test ! -e /etc/sudoers.d/90-workstation; then if sudo -kn true 2>/dev/null; then exit 22; else exit 0; fi; else sudo -n true || exit 21; exit 10; fi"
 if ($LASTEXITCODE -eq 0) { return }
 if ($LASTEXITCODE -ne 10) { throw 'Guest ownership, SSH access or bootstrap sudo could not be confirmed. No account changes were attempted.' }
+if ($WaitForCloudInit) {
+    . (Join-Path $PSScriptRoot 'Ubuntu-Setup.ps1')
+    Wait-UbuntuFirstBoot -Ssh $ssh -Options $options -Target $target -InstallationId $InstallationId
+}
 $remote = ".local/state/workstation-bootstrap/$InstallationId/finalize-account.sh"
 $temporary = [IO.Path]::GetTempFileName()
 try {
