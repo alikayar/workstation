@@ -13,6 +13,7 @@ param(
     [int]$DiskGB,
     [string]$UserName='dev',
     [switch]$NestedVirtualization,
+    [switch]$ConfigureWorkstation,
     [switch]$OpenConsole
 )
 $ErrorActionPreference='Stop'
@@ -34,6 +35,8 @@ if($feature.State -ne 'Enabled'){
 Import-Module Hyper-V
 . (Join-Path $PSScriptRoot 'Clone-VM.ps1')
 . (Join-Path $PSScriptRoot 'VM-Resources.ps1')
+. (Join-Path $PSScriptRoot '..\ubuntu-26-04\Configure-Workstation.ps1')
+if ($ConfigureWorkstation -and $Guest -ne 'Ubuntu') { throw 'Workstation configuration is supported only for Ubuntu.' }
 function Read-CloneValue([string]$Label,[object]$Default,[scriptblock]$Validate){
     while($true){$answer=Read-Host "$Label [$Default]";if([string]::IsNullOrWhiteSpace($answer)){$answer=[string]$Default};try{return & $Validate $answer.Trim()}catch{Write-Host $_.Exception.Message -ForegroundColor Yellow}}
 }
@@ -74,6 +77,14 @@ try{
         }
         if($PSBoundParameters.ContainsKey('NestedVirtualization') -and [bool]$NestedVirtualization -ne $record.Nested){throw 'Saved nested virtualization differs.'}
         $NestedVirtualization=[bool]$record.Nested
+        if (-not $record.PSObject.Properties['Workstation']) {
+            $record | Add-Member -NotePropertyName Workstation -NotePropertyValue ([pscustomobject]@{Enabled=$false;State='Pending';GitName='';GitEmail='';SourceHash=''})
+        }
+        if ($ConfigureWorkstation) {
+            if (-not $record.Workstation.Enabled) { $record.Workstation=Read-WorkstationConfiguration -Enable }
+            $record.Workstation.State='Pending'
+            Save-WVMRecord $record
+        }
     }else{
         if($vm -or(Test-Path -LiteralPath $root)){throw 'Existing VM name or directory is unmanaged; choose another name.'}
         $hostCPUs=[int](Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
@@ -86,6 +97,7 @@ try{
         $reserved=@('root','ubuntu','wvmimage','Administrator','Guest','DefaultAccount','WDAGUtilityAccount','daemon','bin','sys','sync','games','man','lp','mail','news','uucp','proxy','backup','list','irc','nobody')
         if(-not $PSBoundParameters.ContainsKey('UserName')){$UserName=Read-CloneValue 'Guest user name' $UserName {param($v) if($v -cnotmatch $userPattern -or $v -in $reserved){throw 'Choose a new non-system user name.'};$v}}
         if($UserName -cnotmatch $userPattern -or $UserName -in $reserved){throw 'Invalid guest user name.'}
+        $workstation=if($Guest -eq 'Ubuntu'){Read-WorkstationConfiguration -Enable:$ConfigureWorkstation}else{$null}
         $switch=Get-VMSwitch -Name $SwitchName
         if($switch.SwitchType -ne 'Internal'){throw 'Use an existing Internal switch.'}
         if($Guest -eq 'Ubuntu'){$null=Get-UbuntuNetworkTopology $SwitchName}
@@ -97,7 +109,7 @@ try{
         if((Get-Volume -DriveLetter ([IO.Path]::GetPathRoot($root).Substring(0,1))).SizeRemaining -lt ((Get-Item -LiteralPath $image.DiskPath).Length+10GB)){throw 'Not enough disk space for a full independent image copy and working space.'}
         New-WVMPrivateDirectory $root
         New-Item -ItemType Directory -Path (Join-Path $root 'machines')|Out-Null
-        $record=[pscustomobject]@{Schema=1;Backend='Image';Guest=$Guest;OwnerSID=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;Name=$VMName;Root=$root;Token=[guid]::NewGuid().ToString('N');VMId='';DiskPath=(Join-Path $root 'machines\os.vhdx');Phase='Preparing';Setup='Pending';UserName=$UserName;CPUs=$CPUs;MemoryGB=$MemoryGB;DiskGB=$DiskGB;SwitchName=$SwitchName;Nested=[bool]$NestedVirtualization;ImageID=$image.ID;ImageRoot=$spec.ImageRoot;ImageDiskGB=$image.DiskGB;SourceDiskSha256=$image.DiskSha256;DiskCopied=$false;DiskIdentityReset=$false;PreparedDiskSha256='';HardwareReady=$false;Seeded=$false;ClonePayloadHashes=(Get-WVMCloneHashes $Guest);IsoPath='';Address='';HostPublicKey='';SeedSha256=''}
+        $record=[pscustomobject]@{Schema=1;Backend='Image';Guest=$Guest;OwnerSID=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;Name=$VMName;Root=$root;Token=[guid]::NewGuid().ToString('N');VMId='';DiskPath=(Join-Path $root 'machines\os.vhdx');Phase='Preparing';Setup='Pending';UserName=$UserName;CPUs=$CPUs;MemoryGB=$MemoryGB;DiskGB=$DiskGB;SwitchName=$SwitchName;Nested=[bool]$NestedVirtualization;ImageID=$image.ID;ImageRoot=$spec.ImageRoot;ImageDiskGB=$image.DiskGB;SourceDiskSha256=$image.DiskSha256;DiskCopied=$false;DiskIdentityReset=$false;PreparedDiskSha256='';HardwareReady=$false;Seeded=$false;Workstation=$workstation;ClonePayloadHashes=(Get-WVMCloneHashes $Guest);IsoPath='';Address='';HostPublicKey='';SeedSha256=''}
         Save-WVMRecord $record
     }
     $payload=Set-WVMClonePayload $record
@@ -160,6 +172,7 @@ try{
         foreach($name in @('seed.iso','host-ed25519','host-ed25519.pub')){$path=Join-Path $root ('setup-secrets\'+$name);Assert-PackerPath $path;if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path}}
         $secrets=Join-Path $root 'setup-secrets';if((Test-Path -LiteralPath $secrets) -and -not @(Get-ChildItem -LiteralPath $secrets -Force).Count){Remove-Item -LiteralPath $secrets}
         $record.Phase='Complete';$record.Setup='Complete';Save-WVMRecord $record;Set-UbuntuSSHConfig $record
+        Invoke-UbuntuWorkstation $record
     }
     [pscustomobject]@{Name=$VMName;VMId=$record.VMId;Directory=$root;ImageID=$record.ImageID;State=[string](Get-VM -Id $record.VMId).State}
 }finally{if($credential){$credential.Password.Dispose()};if($locked){$mutex.ReleaseMutex()};$mutex.Dispose()}

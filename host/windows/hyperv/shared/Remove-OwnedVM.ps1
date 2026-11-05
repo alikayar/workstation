@@ -2,161 +2,257 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-Deletes an owned Workstation VM and its files, or cleans its orphaned files.
+Deletes an exact Hyper-V VM and its exclusive disks, regardless of installer.
 .DESCRIPTION
-Requires the installation record or an interrupted-deletion journal. Shared ISO
-cache is retained. -Force permits powering off a running or saved VM; it does
-not bypass ownership checks or the active installation lock. Supports -WhatIf.
+Checks live VM/checkpoint references before unregistering and before deleting files.
+An administrator-only journal supports interrupted cleanup. Shared installation
+ISOs are retained. Force permits power-off; it never bypasses reference checks.
 #>
-[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+[CmdletBinding(SupportsShouldProcess, ConfirmImpact='High')]
 param(
-    [Parameter(Mandatory)][ValidateSet('Windows', 'Ubuntu')][string]$Guest,
-    [Parameter(Mandatory)][ValidatePattern('^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$')][string]$VMName,
-    [Parameter(Mandatory)][string]$VMRoot,
+    [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$VMName,
+    [string]$VMRoot,
+    [ValidateSet('Windows','Ubuntu')][string]$Guest,
     [switch]$Force
 )
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
-if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitProcess -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'Use elevated 64-bit PowerShell on Windows 11 x64.' }
 if ($PSVersionTable.PSEdition -eq 'Core') {
-    $arguments = @{}
-    foreach ($entry in $PSBoundParameters.GetEnumerator()) {
-        if ($entry.Value -is [Management.Automation.SwitchParameter]) { $arguments[$entry.Key] = [bool]$entry.Value }
-        else { $arguments[$entry.Key] = $entry.Value }
+    $parameters=@{}
+    foreach($entry in $PSBoundParameters.GetEnumerator()){
+        $parameters[$entry.Key]=if($entry.Value -is [Management.Automation.SwitchParameter]){[bool]$entry.Value}else{$entry.Value}
     }
-    # Preserve inherited WhatIf as well as an explicitly supplied switch.
-    $arguments['WhatIf'] = [bool]$WhatIfPreference
-    $payload = [Management.Automation.PSSerializer]::Serialize(@{ Script = $PSCommandPath; Parameters = $arguments; ConfirmPreference = [string]$ConfirmPreference })
-    $encodedPayload = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($payload))
-    $command = '$p=[Management.Automation.PSSerializer]::Deserialize([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String(''' + $encodedPayload + '''))); $ConfirmPreference=[Management.Automation.ConfirmImpact]$p.ConfirmPreference; $parameters=$p.Parameters; & $p.Script @parameters'
-    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
-    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -EncodedCommand $encodedCommand
-    if ($LASTEXITCODE -ne 0) { throw "Windows PowerShell worker exited with code $LASTEXITCODE." }
+    $parameters.WhatIf=[bool]$WhatIfPreference
+    $data=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes([Management.Automation.PSSerializer]::Serialize(@{Script=$PSCommandPath;Parameters=$parameters;Confirm=[string]$ConfirmPreference})))
+    $program='$p=[Management.Automation.PSSerializer]::Deserialize([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('''+$data+''')));$ConfirmPreference=[Management.Automation.ConfirmImpact]$p.Confirm;$a=$p.Parameters;& $p.Script @a'
+    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($program)))
+    if($LASTEXITCODE){throw 'VM deletion worker failed.'}
     return
 }
 Import-Module Hyper-V
-. (Join-Path $PSScriptRoot '..\windows-pro\Windows-Media.ps1')
-. (Join-Path $PSScriptRoot 'VM.ps1')
-if ($VMRoot -notmatch '^[a-zA-Z]:[\\/]') { throw 'VMRoot must be an absolute local drive path.' }
-$VMRoot = [IO.Path]::GetFullPath($VMRoot).TrimEnd('\')
-$root = Join-Path $VMRoot $VMName
-$recordName = if ($Guest -eq 'Windows') { 'windows-vm.json' } else { 'ubuntu-vm.json' }
-$recordPath = Join-Path $root $recordName
-# Keep deletion ownership outside the directory that may be only partly removed.
-$journalPath = Join-Path $VMRoot ('.' + $VMName + '.delete.json')
-$owner = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-function In-OwnedVMDirectory([string]$Path) {
-    if (-not $Path) { return $false }
-    $full = [IO.Path]::GetFullPath($Path)
-    return $full -ieq $root -or $full.StartsWith(($root + '\'), [StringComparison]::OrdinalIgnoreCase)
+. (Join-Path $PSScriptRoot 'BaseImage.ps1')
+
+function Test-DeletionPath([string]$Path,[string]$Directory) {
+    if(-not $Path -or -not $Directory){return $false}
+    $full=[IO.Path]::GetFullPath($Path).TrimEnd('\')
+    $boundary=[IO.Path]::GetFullPath($Directory).TrimEnd('\')
+    return $full -ieq $boundary -or $full.StartsWith($boundary+'\',[StringComparison]::OrdinalIgnoreCase)
 }
-function Assert-OwnedVMDirectory {
-    Assert-PlainPath $root
-    if (-not (Test-Path -LiteralPath $root)) { return }
-    $pending = New-Object 'Collections.Generic.Stack[string]'
-    $pending.Push($root)
-    while ($pending.Count) {
-        foreach ($item in @(Get-ChildItem -LiteralPath $pending.Pop() -Force)) {
-            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked VM content refused.' }
-            if ($item.PSIsContainer) { $pending.Push($item.FullName) }
+
+function Get-DeletionDiskChain([string]$Path,[switch]$AllowMissingLeaf) {
+    if(-not $Path){throw 'Physical/pass-through disks cannot be deleted as VM files.'}
+    $seen=@{}
+    while($Path){
+        $Path=[IO.Path]::GetFullPath($Path)
+        Assert-PackerPath $Path
+        if($seen.ContainsKey($Path)){throw 'Disk chain contains a cycle.'}
+        $seen[$Path]=$true
+        $Path
+        # Retain the leaf reference even when its file is gone; it has no readable parent chain.
+        # A missing parent of an existing disk still fails inspection.
+        if($AllowMissingLeaf -and $seen.Count -eq 1 -and -not(Test-Path -LiteralPath $Path)){return}
+        $Path=(Get-VHD -Path $Path).ParentPath
+    }
+}
+
+function Get-DeletionVersions($VM) {
+    @{Value=$VM;Snapshot=$false}
+    foreach($snapshot in @(Get-VMSnapshot -VM $VM)){@{Value=$snapshot;Snapshot=$true}}
+}
+
+function Get-DeletionRecord($VM) {
+    # Optional cleanup metadata, not a schema/version gate. Live identity is authoritative.
+    $cursor=[IO.Path]::GetFullPath($VM.Path)
+    while($cursor){
+        foreach($file in @('windows-vm.json','ubuntu-vm.json')){
+            $path=Join-Path $cursor $file
+            Assert-PackerPath $path
+            if(-not(Test-Path -LiteralPath $path)){continue}
+            try { $record=Get-Content -LiteralPath $path -Raw|ConvertFrom-Json }
+            catch { continue }
+            if (@('VMId','Root','Name','Token','OwnerSID') | Where-Object { -not $record.PSObject.Properties[$_] }) { continue }
+            if(-not $record.PSObject.Properties['VMId'] -or [string]$record.VMId -ine [string]$VM.Id){continue}
+            if(-not $record.PSObject.Properties['Root'] -or $record.Root -ine $cursor -or $record.Name -ine $VM.Name){continue}
+            if([IO.Path]::GetFileName($cursor) -ine $VM.Name){continue}
+            $family=if($file -eq 'ubuntu-vm.json'){'Ubuntu'}else{'Windows'}
+            if($record.Token -cnotmatch '^[a-f0-9]{32}$' -or $VM.Notes -cne ('Workstation '+$family+' VM '+$record.Token)){continue}
+            return [pscustomobject]@{Root=$cursor;Guest=$family;Token=$record.Token;OwnerSID=$record.OwnerSID}
+        }
+        $cursor=[IO.Path]::GetDirectoryName($cursor)
+    }
+}
+
+function Get-DeletionTree([string]$Root) {
+    Assert-PackerPath $Root
+    if(-not(Test-Path -LiteralPath $Root)){return}
+    $pending=New-Object 'Collections.Generic.Stack[string]'
+    $pending.Push($Root)
+    while($pending.Count){
+        $directory=$pending.Pop()
+        foreach($item in @(Get-ChildItem -LiteralPath $directory -Force)){
+            if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Linked VM content cannot be deleted.'}
+            $item
+            if($item.PSIsContainer){$pending.Push($item.FullName)}
         }
     }
 }
-function Assert-OwnedVMReferences([object[]]$inventory, [object]$vm) {
-    foreach ($candidate in $inventory) {
-        $owned = $vm -and [string]$candidate.Id -eq [string]$vm.Id
-        if ((In-OwnedVMDirectory $candidate.Path) -ne [bool]$owned) { throw 'VM configuration crosses the deletion boundary.' }
-        $versions = @(@{ Value = $candidate; Snapshot = $false })
-        $versions += @(Get-VMSnapshot -VM $candidate | ForEach-Object { @{ Value = $_; Snapshot = $true } })
-        foreach ($entry in $versions) {
-            $version = $entry.Value
-            if ($entry.Snapshot) {
-                if ((In-OwnedVMDirectory $version.Path) -ne [bool]$owned) { throw 'Checkpoint configuration crosses the deletion boundary.' }
-                $disks = @(Get-VMHardDiskDrive -VMSnapshot $version)
-                $dvds = @(Get-VMDvdDrive -VMSnapshot $version)
-            } else {
-                $disks = @(Get-VMHardDiskDrive -VM $version)
-                $dvds = @(Get-VMDvdDrive -VM $version)
+
+function New-VMDeletionPlan($VM) {
+    $files=@();$directories=@();$roots=@();$ids=@([string]$VM.Id)
+    foreach($version in @(Get-DeletionVersions $VM)){
+        $value=$version.Value
+        $ids += [string]$value.Id
+        foreach($property in @('Path','ConfigurationLocation','SnapshotFileLocation','SmartPagingFilePath')){
+            if($value.PSObject.Properties[$property] -and $value.$property){$roots += [IO.Path]::GetFullPath($value.$property)}
+        }
+        $drives=if($version.Snapshot){@(Get-VMHardDiskDrive -VMSnapshot $value)}else{@(Get-VMHardDiskDrive -VM $value)}
+        foreach($drive in $drives){
+            foreach($disk in @(Get-DeletionDiskChain $drive.Path -AllowMissingLeaf)){
+                $files += $disk
+                foreach($suffix in @('.rct','.mrt')){if(Test-Path -LiteralPath ($disk+$suffix)){$files += $disk+$suffix}}
+                $directories += Split-Path -Parent $disk
             }
-            foreach ($dvd in $dvds) { if (-not $owned -and (In-OwnedVMDirectory $dvd.Path)) { throw 'Another VM references media inside this directory.' } }
-            foreach ($disk in $disks) {
-                $path = $disk.Path
-                if ($owned -and -not $path) { throw 'Unexpected physical disk attachment; VM preserved.' }
-                $seen = @{}
-                while ($path) {
-                    if ((In-OwnedVMDirectory $path) -ne [bool]$owned) { throw 'A disk chain crosses the deletion boundary; VM and files preserved.' }
-                    if ($seen.ContainsKey($path)) { throw 'Disk-chain cycle; cleanup refused.' }
-                    $seen[$path] = $true
-                    $path = (Get-VHD -Path $path).ParentPath
+        }
+    }
+    $metadata=Get-DeletionRecord $VM
+    if($metadata){
+        $roots += $metadata.Root
+        $directories += $metadata.Root
+        foreach($item in @(Get-DeletionTree $metadata.Root)){
+            if($item.PSIsContainer){$directories += $item.FullName}else{$files += $item.FullName}
+        }
+    } else {
+        # Shared Hyper-V directories are not recursively deleted. Select only this VM's GUID files.
+        foreach($root in @($roots|Select-Object -Unique)){
+            foreach($item in @(Get-DeletionTree $root)){
+                if($item.PSIsContainer){continue}
+                if($item.BaseName -in $ids -and $item.Extension -in @('.vmcx','.vmrs','.vmgs','.xml','.bin','.vsv','.slp')){
+                    $files += $item.FullName
+                    $directories += $item.DirectoryName
+                }
+            }
+            $directories += $root
+        }
+    }
+    [pscustomobject]@{
+        Schema=1;Name=$VM.Name;VMId=[string]$VM.Id;Notes=[string]$VM.Notes
+        OwnerSID=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        Files=@($files|Sort-Object -Unique);Directories=@($directories|Sort-Object -Unique)
+        Metadata=$metadata
+    }
+}
+
+function Assert-VMDeletionReferences($Plan,[object[]]$Inventory) {
+    $wanted=@{};foreach($path in $Plan.Files){Assert-PackerPath $path;$wanted[[IO.Path]::GetFullPath($path)]=$true}
+    foreach($vm in $Inventory){
+        if([string]$vm.Id -eq $Plan.VMId){continue}
+        foreach($version in @(Get-DeletionVersions $vm)){
+            $value=$version.Value
+            foreach($property in @('Path','ConfigurationLocation','SnapshotFileLocation','SmartPagingFilePath')){
+                if($value.PSObject.Properties[$property] -and $value.$property){
+                    if($Plan.Metadata -and (Test-DeletionPath $value.$property $Plan.Metadata.Root)){throw 'Another VM uses this installation directory.'}
+                    # Even in a shared configuration directory, foreign GUID files cannot be removed.
+                    foreach($path in $Plan.Files){
+                        if((Test-DeletionPath $path $value.$property) -and [IO.Path]::GetFileNameWithoutExtension($path) -ieq [string]$value.Id){throw 'Another VM uses a planned configuration file.'}
+                    }
+                }
+            }
+            $disks=if($version.Snapshot){@(Get-VMHardDiskDrive -VMSnapshot $value)}else{@(Get-VMHardDiskDrive -VM $value)}
+            $dvds=if($version.Snapshot){@(Get-VMDvdDrive -VMSnapshot $value)}else{@(Get-VMDvdDrive -VM $value)}
+            foreach($dvd in $dvds){if($dvd.Path -and $wanted.ContainsKey([IO.Path]::GetFullPath($dvd.Path))){throw 'Another VM uses planned installation media.'}}
+            foreach($drive in $disks){
+                if(-not $drive.Path){continue}
+                foreach($disk in @(Get-DeletionDiskChain $drive.Path -AllowMissingLeaf)){
+                    if($wanted.ContainsKey($disk)){throw "Disk is used by another VM or checkpoint: $disk"}
                 }
             }
         }
     }
 }
-$mutex = New-Object Threading.Mutex($false, ('Global\Workstation-' + $Guest + 'VM-' + $VMName.ToLowerInvariant()))
-$locked = $false
-try {
-    try { $locked = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked = $true }
-    if (-not $locked) { throw 'A create/resume/delete command is still using this VM. Stop that command before deleting; -Force does not override its lock.' }
-    Assert-PackerIdle $root
-    Assert-OwnedVMDirectory
-    Assert-PlainPath $journalPath
-    Assert-PlainPath $recordPath
-    $inventory = @(Get-VM)
-    $named = @($inventory | Where-Object Name -eq $VMName)
-    $journalExists = Test-Path -LiteralPath $journalPath
-    $markerExists = Test-Path -LiteralPath $recordPath
-    if (-not $journalExists -and -not $markerExists) {
-        if ($named.Count -or (Test-Path -LiteralPath $root)) { throw 'No ownership record; existing VM and files preserved.' }
-        Write-Host "Nothing to remove: $VMName."
-        return
+
+$hash=[Security.Cryptography.SHA256]::Create()
+try{$key=[BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($VMName.ToLowerInvariant()))).Replace('-','')}finally{$hash.Dispose()}
+$journalRoot=Join-Path $env:ProgramData 'Workstation\Deletions'
+$journalPath=Join-Path $journalRoot ($key+'.json')
+Assert-PackerPath $journalPath
+$locks=@()
+try{
+    # Coordinate with current creation and lifecycle commands, without needing an OS record.
+    foreach($name in @('Windows','Ubuntu')){
+        $mutex=New-Object Threading.Mutex($false,('Global\Workstation-'+$name+'VM-'+$VMName.ToLowerInvariant()))
+        $locked=$false
+        try{$locked=$mutex.WaitOne(0)}catch [Threading.AbandonedMutexException]{$locked=$true}
+        if(-not $locked){$mutex.Dispose();throw 'Another operation is using this VM.'}
+        $locks += $mutex
     }
-    $journalText = if ($journalExists) { Get-Content -LiteralPath $journalPath -Raw } else { $null }
-    $markerText = if ($markerExists) { Get-Content -LiteralPath $recordPath -Raw } else { $null }
-    $record = if ($journalExists) { $journalText | ConvertFrom-Json } else { $markerText | ConvertFrom-Json }
-    Assert-WVMRecord $record
-    if ($record.Guest -cne $Guest -or $record.Name -ine $VMName -or $record.Root -ine $root) { throw 'VM deletion record differs.' }
-    if ($record.VMId -and $record.VMId -notmatch '^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$') { throw 'Invalid recorded VM identity.' }
-    if ($journalExists -and $markerExists) {
-        $marker = $markerText | ConvertFrom-Json
-        if ($marker.OwnerSID -cne $record.OwnerSID -or $marker.Name -ine $record.Name -or $marker.Root -ine $root -or $marker.VMId -ne $record.VMId -or $marker.Token -cne $record.Token) { throw 'Deletion journal belongs to another VM generation; files preserved.' }
+    $inventory=@(Get-VM)
+    $matches=@($inventory|Where-Object Name -eq $VMName)
+    if($matches.Count -gt 1){throw 'VM name is ambiguous.'}
+    $vm=if($matches.Count){$matches[0]}else{$null}
+    if(Test-Path -LiteralPath $journalPath){
+        Assert-WVMImageACL $journalRoot
+        Assert-WVMImageACL $journalPath
+        $plan=Get-Content -LiteralPath $journalPath -Raw|ConvertFrom-Json
+        if($plan.Schema -ne 1 -or $plan.Name -ine $VMName -or $plan.OwnerSID -cne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value){throw 'Deletion journal identity differs.'}
+        if($vm -and ([string]$vm.Id -ne $plan.VMId -or [string]$vm.Notes -cne $plan.Notes)){throw 'A different VM now has this name.'}
+    }else{
+        if(-not $vm){Write-Host "VM not found and no pending deletion: $VMName";return}
+        $plan=New-VMDeletionPlan $vm
     }
-    $identified = @($inventory | Where-Object { $record.VMId -and [string]$_.Id -eq $record.VMId })
-    if ($named.Count -gt 1 -or $identified.Count -gt 1 -or ($named.Count -and [string]$named[0].Id -ne $record.VMId) -or ($identified.Count -and $identified[0].Name -ine $VMName)) { throw 'VM name or identity was replaced; nothing removed.' }
-    $vm = if ($identified.Count) { $identified[0] } else { $null }
-    if ($vm -and $vm.Notes -cne ('Workstation ' + $Guest + ' VM ' + $record.Token)) { throw 'VM ownership token differs.' }
-    Assert-OwnedVMReferences $inventory $vm
-    if ($vm -and $vm.State -ne 'Off' -and -not $Force) { throw 'VM is not Off. Shut it down first, or use -Force to power it off and delete its data.' }
-    if (-not $PSCmdlet.ShouldProcess("$VMName; all files in $root", 'Permanently delete owned VM, checkpoints, disks and setup secrets')) { return }
-    if ($markerExists -and (Get-Content -LiteralPath $recordPath -Raw) -cne $markerText) { throw 'Installation record changed; cleanup refused.' }
-    if ($journalExists -and (Get-Content -LiteralPath $journalPath -Raw) -cne $journalText) { throw 'Deletion journal changed; cleanup refused.' }
-    if (-not $journalExists) {
-        $bytes = (New-Object Text.UTF8Encoding($false)).GetBytes(($record | ConvertTo-Json -Depth 16))
-        $stream = [IO.File]::Open($journalPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+    $identityLock=New-Object Threading.Mutex($false,('Global\Workstation-WVM-'+$plan.VMId))
+    $locked=$false
+    try{$locked=$identityLock.WaitOne(0)}catch [Threading.AbandonedMutexException]{$locked=$true}
+    if(-not $locked){$identityLock.Dispose();throw 'Another power operation is using this VM.'}
+    $locks += $identityLock
+    if($VMRoot -and $plan.Metadata -and [IO.Path]::GetFullPath((Join-Path $VMRoot $VMName)) -ine $plan.Metadata.Root){throw 'VMRoot does not match the VM directory.'}
+    if($plan.Metadata){Assert-PackerIdle $plan.Metadata.Root}
+    Assert-VMDeletionReferences $plan $inventory
+    if($vm -and $vm.State -ne 'Off' -and -not $Force){throw 'Shut down the VM first, or explicitly use -Force.'}
+    $description="$VMName [$($plan.VMId)]; $(@($plan.Files).Count) exclusive files"
+    if(-not $PSCmdlet.ShouldProcess($description,'Delete VM, checkpoints and exclusive disks/files')){return}
+    if(-not(Test-Path -LiteralPath $journalRoot)){New-WVMPrivateDirectory $journalRoot -ImageStore}
+    Assert-WVMImageACL $journalRoot
+    if(-not(Test-Path -LiteralPath $journalPath)){
+        Save-PackerText $journalPath ($plan|ConvertTo-Json -Depth 12)
+        Protect-WVMImageFile $journalPath
     }
-    if ($vm) {
-        $current = Get-VM -Id $record.VMId
-        if ($current.Name -ine $VMName -or $current.Notes -cne ('Workstation ' + $Guest + ' VM ' + $record.Token)) { throw 'VM changed before removal.' }
-        if ($current.State -ne 'Off') {
-            if (-not $Force) { throw 'VM started during deletion; use -Force explicitly if intended.' }
+    if($vm){
+        $current=Get-VM -Id $plan.VMId
+        if($current.Name -ine $plan.Name -or [string]$current.Notes -cne $plan.Notes){throw 'VM identity changed before deletion.'}
+        if($current.State -ne 'Off'){
+            if(-not $Force){throw 'VM started during deletion.'}
             Stop-VM -VM $current -TurnOff -Force -Confirm:$false
         }
+        # Rebuild the plan after power-off; checkpoint/disk changes require a fresh invocation.
+        $currentPlan=New-VMDeletionPlan (Get-VM -Id $plan.VMId)
+        if(@($currentPlan.Files | Where-Object { $_ -notin $plan.Files }).Count){throw 'VM files changed; deletion journal retained for inspection.'}
+        Assert-VMDeletionReferences $plan @(Get-VM)
         Remove-VM -VM $current -Force -Confirm:$false
     }
-    Assert-PackerIdle $root
-    Assert-OwnedVMDirectory
-    Assert-OwnedVMReferences @(Get-VM) $null
-    if ([IO.Path]::GetFullPath($root) -ine (Join-Path $VMRoot $VMName)) { throw 'Unexpected deletion target.' }
-    if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -Confirm:$false }
-    if (Test-Path -LiteralPath $root) { throw 'VM files remain; deletion journal retained for retry.' }
-    if ($Guest -eq 'Ubuntu') {
+    $remaining=@(Get-VM)
+    if(@($remaining|Where-Object { [string]$_.Id -eq $plan.VMId -or $_.Name -eq $plan.Name }).Count){throw 'VM identity/name still registered; files retained.'}
+    Assert-VMDeletionReferences $plan $remaining
+    if($plan.Metadata){Assert-PackerIdle $plan.Metadata.Root}
+    foreach($path in $plan.Files){
+        Assert-PackerPath $path
+        if(Test-Path -LiteralPath $path){
+            if((Get-Item -LiteralPath $path -Force).PSIsContainer){throw 'Planned file became a directory.'}
+            Remove-Item -LiteralPath $path -Force -Confirm:$false
+        }
+    }
+    foreach($directory in @($plan.Directories|Sort-Object Length -Descending)){
+        if (-not [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($directory).TrimEnd('\'))) { continue }
+        Assert-PackerPath $directory
+        if((Test-Path -LiteralPath $directory) -and -not @(Get-ChildItem -LiteralPath $directory -Force).Count){
+            Remove-Item -LiteralPath $directory -Confirm:$false
+        }
+    }
+    if($plan.Metadata -and $plan.Metadata.Guest -eq 'Ubuntu' -and $plan.Metadata.OwnerSID -ceq $plan.OwnerSID){
         . (Join-Path $PSScriptRoot '..\ubuntu-26-04\Ubuntu-Setup.ps1')
-        Remove-UbuntuSSHConfig $record
+        Remove-UbuntuSSHConfig $plan.Metadata
     }
     Remove-Item -LiteralPath $journalPath -Force -Confirm:$false
-    Write-Host "Removed $VMName and its owned files. Shared ISO cache retained."
-} finally {
-    if ($locked) { $mutex.ReleaseMutex() }
-    $mutex.Dispose()
+    Write-Host "Deleted $VMName, its exclusive disks and VM files. Shared installation media retained."
+}finally{
+    foreach($mutex in $locks){$mutex.ReleaseMutex();$mutex.Dispose()}
 }

@@ -1,25 +1,25 @@
 # Windows setup
 
-Windows features have separate entry points. Run terminal/application setup in a **normal PowerShell window**; run VM creation/removal in an **administrator, 64-bit PowerShell window** on Windows 11 Pro x64.
+Install wvm once from the cloned checkout in a **normal PowerShell window**:
 
-```powershell
-# Terminal only
-.\host\windows\terminal\Install-Terminal.ps1
+~~~powershell
+.\host\windows\hyperv\wvm\Install-WVM.ps1
+wvm help
+wvm terminal install  # Optional terminal setup
+wvm host install      # Optional VS Code plus terminal setup
+~~~
 
-# Optional VS Code installation plus the same terminal setup
-.\host\windows\Install-Host.ps1
-```
-
+Use an **administrator, 64-bit PowerShell window** for VM/image operations on Windows 11 Pro x64. Installing wvm itself does not install host applications or create VMs. All user-facing operations go through wvm; the other scripts are implementation details.
 Windows Pro VM creation requires Hyper-V to be enabled beforehand. The Ubuntu command enables Hyper-V if disabled, then stops before downloading media or creating a VM and asks you to restart Windows and rerun it. Pending enable/disable changes also stop for a restart. No automatic reboot occurs. Ubuntu also needs the Windows OpenSSH Client optional feature. Existing development VMs are not altered. When testing inside another VM, the outer hypervisor must expose nested virtualization and leave sufficient RAM for both levels.
 
 ## Source layout
 
 | Location | Responsibility |
 | --- | --- |
-| `host/windows/Install-Host.ps1` | VS Code installation and terminal setup |
+| `host/windows/apps/Install-Applications.ps1` | VS Code dependency installation, called by wvm host install |
 | `host/windows/terminal/` | Terminal dependencies, PowerShell startup, font and appearance |
-| `host/windows/hyperv/wvm/wvm.ps1`, `Install-WVM.ps1` | Guest OS selection and optional per-user command installation |
-| `host/windows/hyperv/windows-pro/` | Windows Pro creation, unattended setup and owned-VM removal |
+| `host/windows/hyperv/wvm/wvm.ps1`, `Install-WVM.ps1` | Single user command and its per-user bootstrap installation |
+| `host/windows/hyperv/windows-pro/` | Windows Pro image recipe and unattended setup |
 | `host/windows/hyperv/ubuntu-26-04/` | Ubuntu creation, Packer recipe, host-enforced network policy, SSH/account finalization and recovery |
 | `host/windows/hyperv/shared/Packer.ps1` | Pinned Packer installation and build process handling |
 | `host/windows/hyperv/shared/Seed-ISO.ps1` | Shared native Windows ISO creation |
@@ -36,7 +36,7 @@ Run this once from the checkout in a **normal PowerShell window**:
 wvm help
 ```
 
-The installer places a managed CMD launcher, PowerShell dispatcher and checkout-location record under `%LOCALAPPDATA%\Workstation\bin`, adds that directory to the user's PATH once and updates the current PowerShell process PATH. It does not install terminal applications, change profiles, enable Hyper-V or create a VM. Reruns update only files marked as Workstation-managed; unrelated files, another existing `wvm` command and linked paths are refused. The dispatcher is refreshed when the installer is rerun; the guest installers continue to run from this checkout. Keep the checkout in place, and rerun installation after moving it or updating the dispatcher. Other terminal processes may retain their old PATH; signing out and back in refreshes that environment. The CMD launcher runs inbox PowerShell 5.1 with process-only `RemoteSigned`; persistent execution policies and Group Policy are not changed. Downloaded scripts still need to be trusted/unblocked before use.
+The installer places a managed CMD launcher, PowerShell dispatcher and checkout-location record under `%LOCALAPPDATA%\Workstation\bin`, adds that directory to the user's PATH once and updates the current PowerShell process PATH. It does not install terminal applications, change profiles, enable Hyper-V or create a VM. Reruns update only files marked as Workstation-managed; unrelated files, another existing `wvm` command and linked paths are refused. The installed dispatcher is a small forwarding script; command routing and all implementation code run directly from this checkout. Keep the checkout in place, and rerun installation after moving it. Other terminal processes may retain their old PATH; signing out and back in refreshes that environment. The CMD launcher runs inbox PowerShell 5.1 with process-only `RemoteSigned`; persistent execution policies and Group Policy are not changed. Downloaded scripts still need to be trusted/unblocked before use.
 
 Then, in an **administrator PowerShell window**:
 
@@ -56,7 +56,7 @@ wvm list
 
 `wvm list` reads all local Hyper-V VMs, including those created outside Workstation, and displays name, state, CPU count, assigned/startup memory and uptime. It never starts, stops or changes a VM. The account needs Hyper-V inventory access; use an administrator PowerShell window if access is denied. Create-only flags are refused for list.
 
-Only explicitly supplied settings are forwarded. Each OS keeps its own VM name, storage root, disk-size default and validation. `-NestedVirtualization` is supported only with Windows Pro. Passwords are never CLI arguments. Help works without administrator rights; create does not elevate automatically. To use the dispatcher without installing a shortcut, run `.\host\windows\hyperv\wvm\wvm.ps1 create` from the checkout instead.
+Only explicitly supplied settings are forwarded. Each OS keeps its own VM name, storage root, disk-size default and validation. `-NestedVirtualization` is supported only with Windows Pro. Passwords are never CLI arguments. Help works without administrator rights; create does not elevate automatically.
 
 ### Start, stop and delete by VM name
 
@@ -73,10 +73,11 @@ wvm delete interview
 
 Start and stop accept an exact existing local VM name, including unmanaged VMs; wildcard matching is not used. Starting a running VM and stopping an Off VM are harmless repeats. Stop requests a normal guest shutdown and waits up to two minutes; it never silently cuts power. Saved/paused guests must be handled explicitly. Operations on managed VMs share their installer's lock and refuse active Packer/setup processes. A managed installation must be complete before start; use create to finish recovery otherwise. Ubuntu's isolation policy is refreshed while Off or verified before restoring a saved/running VM. This command does not refresh SSH aliases after a DHCP address change; rerun the Ubuntu create/resume command when that is needed.
 
-Delete accepts only a VM with a matching Workstation ownership record, owner SID, VM ID and token. It discovers the storage root from the registered VM's configuration path; `-VMRoot` may be supplied explicitly and must agree. It asks for confirmation, requires the VM to be Off and removes its registration, checkpoints and owned directory, including setup secrets and keys. The shared ISO/tool cache is retained. Ubuntu deletion removes only the SSH config block bearing that VM's installation token. An unmanaged VM such as an existing development VM cannot be deleted through wvm. Start/stop also support `-WhatIf`.
+Delete accepts any exact registered Hyper-V VM name, regardless of installer or installation-record version. Hyper-V supplies the VM ID, active disks and checkpoint disk chains. Before unregistering the VM and again before removing files, deletion checks all other VMs and checkpoints for shared disks (including parent VHDs), configuration and media references. Any conflict aborts deletion. Confirmation is required; the VM must be Off unless -Force explicitly permits power-off. -WhatIf performs discovery and reference checks without creating a journal or deleting anything.
 
-`wvm delete interview -Force` explicitly permits cutting power to a running/saved VM before the confirmed deletion; it does not bypass ownership, active-process or shared-disk protections. Deletion uses an external journal for retry, rejects linked paths and scans all VMs/checkpoints for references before removing data. The Windows standalone removal command delegates to this same shared implementation. If the VM registration is already gone, orphan cleanup searches the two default storage roots; for custom storage, use `wvm delete interview -VMRoot 'D:\VMs'`. Ambiguous records or replaced identities are refused. Missing records are never reconstructed by adopting an existing VM.
+For Workstation VMs, optional metadata with matching live VM ID/name/token identifies setup files, keys and the installation directory; its schema/backend are not used as eligibility criteria. Without metadata, cleanup removes the disks and VM-specific configuration/state files identified from Hyper-V, then empty directories. It does not guess ownership of unrelated files in a shared directory. Shared installation ISOs and tool caches are retained. A matching Ubuntu SSH-config block is removed for its owning user.
 
+An administrator-only journal under %ProgramData%\Workstation\Deletions stores the exact file plan before unregistering. Rerunning the same delete command completes interrupted cleanup even after VM registration disappears. A new VM reusing the name is refused. A VM that was already unregistered before any deletion plan was captured is not guessed from stray files. No VM name has a special exemption.
 ## Packer-first base images
 
 Packer builds a generalized **base image once per recipe fingerprint**. VM creation copies that disk into an independent writable VHDX, creates a new Hyper-V VM and applies instance-specific configuration. It does not run the ISO installer again when a matching verified image exists.
@@ -102,7 +103,11 @@ Every VM receives a **full copy**, not a differencing child of the base. Its VHD
 
 ## Ubuntu Server 26.04 clones
 
-`wvm create -OS ubuntu-26-04` (or `host/windows/hyperv/ubuntu-26-04/New-UbuntuVM.ps1`) asks for name, resources and non-root user. Defaults remain `workstation-ubuntu-26-04`, **4 CPUs / 8 GiB / 80 GiB**, user `dev`; Enter accepts each default. Explicit parameters skip their questions. The new clone path accepts 4–32 GiB RAM. Ubuntu can enable Hyper-V when absent, then asks for a Windows restart and stops without creating a VM. Windows OpenSSH Client is required. Ansible/workstation provisioning remains a separate step inside Ubuntu.
+`wvm create -OS ubuntu-26-04` asks for name, resources and non-root user. Defaults remain `workstation-ubuntu-26-04`, **4 CPUs / 8 GiB / 80 GiB**, user `dev`; Enter accepts each default. Explicit parameters skip their questions. The new clone path accepts 4–32 GiB RAM. Ubuntu can enable Hyper-V when absent, then asks for a Windows restart and stops without creating a VM. Windows OpenSSH Client is required. During the initial questions, Ubuntu also asks **Install the Workstation development environment too? [Y/n]**. Enter (including whitespace-only input) accepts Yes; `n` skips it. Yes asks for the Git author name/email required by the existing playbook and saves the preference with the VM record. After account finalization, SSH and network isolation are ready, the selected configuration runs automatically inside Ubuntu as its non-root user. The VM remains ready if configuration fails; rerun **wvm configure VM_NAME** to retry or opt in later. Completed configuration is skipped by ordinary create/resume; configure explicitly reapplies the saved source snapshot.
+
+The host uploads only tracked ansible/dotfiles source and ansible.cfg from this checkout (including working-tree edits), excluding local host_vars/localhost.yml, Git history and credentials. A hashed source bundle is retained for repeatable retries. The guest installs ansible-core, python3-debian and sudo, then runs ansible-playbook ansible/site.yml. The Git identity is supplied as non-secret extra variables. The initial account password stays in Ubuntu's passwd prompt; configuration asks for that sudo password once more in the guest terminal, shares it with package installation and Ansible through process input/anonymous pipes, and never stores it in VM records, archives, command arguments or files. Workstation is not baked into the reusable base image.
+
+For an explicit opt-in without the yes/no question, use **wvm create -OS ubuntu-26-04 -ConfigureWorkstation**; Git identity questions still apply.
 
 The base uses pinned **Ubuntu Server 26.04.1 amd64**, SHA256 `cc8a95cde20f6ced61a322420de00f10cc3c90ced545daa46cb9c1a117f1d927`, downloaded from Canonical over HTTPS. The temporary builder has a locked-password account with unique temporary client/server SSH keys. A strictly pinned SSH session waits for cloud-init, removes the build account, SSH host keys, temporary sudo access, installer/cloud-init state and machine identity, then runs `cloud-init clean --logs --machine-id --seed`. A token-specific sealing attestation and verified normal shutdown are required before image publication. Builder credentials and seed media are removed with its owned build directory.
 
@@ -125,7 +130,7 @@ A clone gets a new NoCloud CIDATA seed, hostname/instance ID, SSH client and pin
 
 Blocked prefixes include host IPv4 addresses and connected on-link routes, so public-address LANs are covered as well as RFC1918 networks. MAC spoofing, teaming, port mirroring and SR-IOV bypass are disabled; DHCP and router guards are enabled. Wildcard MAC ACLs are not installed: both the combined and egress-only variants broke Default Switch boot networking during live testing; the IP-only comparison restored SSH. Prior managed MAC rules are removed during the journaled update. This is TCP/UDP IP connection isolation on a shared switch, not layer-2 separation: ARP/broadcast visibility, raw Ethernet covert channels and broadcast denial of service remain outside its guarantee. A separately segmented network is needed when untrusted guests must not share layer 2. Internet access can still transmit guest data to Internet services; proxies, host-configured port forwarding and hypervisor vulnerabilities are outside this policy's guarantee.
 
-For new image-backed clones, the policy is installed **while Off before the first guest boot**. The isolated Packer builder runs only pinned, trusted installation content and is deleted after sealing; do not run untrusted code there. Do not run untrusted code during installation. For an existing installed VM, shut it down normally, then rerun the same `New-UbuntuVM.ps1` command; it installs the policy and resumes that VM without reinstalling Ubuntu or resetting the password. A running VM without a policy is refused, not forcibly stopped. A saved VM needing changes must first be resumed and shut down normally.
+For new image-backed clones, the policy is installed **while Off before the first guest boot**. The isolated Packer builder runs only pinned, trusted installation content and is deleted after sealing; do not run untrusted code there. Do not run untrusted code during installation. For an existing installed VM, shut it down normally, then rerun the same `wvm create -OS ubuntu-26-04` command; it installs the policy and resumes that VM without reinstalling Ubuntu or resetting the password. A running VM without a policy is refused, not forcibly stopped. A saved VM needing changes must first be resumed and shut down normally.
 
 `network-policy.json` records the VM, adapter, ownership token, topology and exact managed rules. Policy changes are journaled before mutation and verified by reading the adapter back. Interrupted installation leaves an `Applying` journal and the VM Off; rerun to reconcile only recorded rules. Foreign ACLs or a replaced adapter cause a refusal. An unchanged policy is not rewritten. No background service or scheduled task is installed.
 
@@ -137,7 +142,7 @@ The Default Switch DNS proxy did not answer TCP before isolation, so DNS-over-TC
 
 ## Windows 11 Pro clones
 
-`wvm create -OS windows-pro` (or `host/windows/hyperv/windows-pro/New-WindowsProVM.ps1`) keeps defaults `workstation-windows-pro`, **4 CPUs / 8 GiB / 120 GiB**, user `dev`. Names and omitted resources are interactive; Enter accepts defaults. `-NestedVirtualization` exposes virtualization extensions on the new VM. Generation 2, Microsoft Windows Secure Boot, a fresh local vTPM, fixed RAM, disabled automatic checkpoints/auto-start and disabled Guest Service Interface are applied before its first boot. Use basic VMConnect for untrusted work; enhanced sessions can redirect host resources. Windows' Internal switch is not the Ubuntu network-isolation policy.
+`wvm create -OS windows-pro` keeps defaults `workstation-windows-pro`, **4 CPUs / 8 GiB / 120 GiB**, user `dev`. Names and omitted resources are interactive; Enter accepts defaults. `-NestedVirtualization` exposes virtualization extensions on the new VM. Generation 2, Microsoft Windows Secure Boot, a fresh local vTPM, fixed RAM, disabled automatic checkpoints/auto-start and disabled Guest Service Interface are applied before its first boot. Use basic VMConnect for untrusted work; enhanced sessions can redirect host resources. Windows' Internal switch is not the Ubuntu network-isolation policy.
 
 The Packer base installs **Windows 11 Pro 25H2** into Audit Mode, without creating the final user or asking for a password. An audit task runs Sysprep `/generalize /oobe /shutdown /mode:vm`. The host requires normal shutdown, the matching image/build token and the offline SOFTWARE hive's `IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE` state. It never publishes a merely powered-off, unverified installation. Windows recovery is placed before the final C: partition so C: can grow in clones.
 
@@ -162,13 +167,13 @@ The image/clone architecture still needs fresh Hyper-V end-to-end validation for
 Terminal setup is self-contained. From a **normal PowerShell 5.1 or 7 window**, run:
 
 ```powershell
-.\host\windows\terminal\Install-Terminal.ps1
+wvm terminal install
 ```
 
 `Install-Terminal.ps1` owns installation of **PowerShell 7, Windows Terminal and Starship** through the explicit WinGet package IDs and the `winget` source. Existing executables are reused without upgrading or reinstalling. App Installer/WinGet is needed only when a dependency is missing; the command reports how to obtain it if unavailable. The installer accepts the selected package/source agreements, and an individual package installer may request elevation. Process PATH is refreshed without changing persistent PATH. Failed installation or a still-missing executable stops before terminal configuration.
 
-After dependencies are available, `Install-Terminal.ps1` prepares the prompt, pinned Nerd Font, Slate Glass and Terminal profiles directly. `Install-Host.ps1` delegates terminal preparation to this same entry point. Running terminal installation alone does not install VS Code, Git, WSL or Hyper-V, and does not create VMs.
+After dependencies are available, `Install-Terminal.ps1` prepares the prompt, pinned Nerd Font, Slate Glass and Terminal profiles directly. `wvm host install` delegates terminal preparation to this same entry point. Running terminal installation alone does not install VS Code, Git, WSL or Hyper-V, and does not create VMs.
 
-There are two scripts under `host/windows/terminal/`: run `Install-Terminal.ps1` for installation and configuration; `PowerShell-Profile.ps1` is the runtime profile copied by the installer and loaded automatically in each new Workstation tab. The runtime loads Starship and available PSReadLine settings. Configuration uses `%LOCALAPPDATA%\Workstation\Terminal`; existing `$PROFILE` files remain untouched. Console-only PSReadLine configuration is skipped with redirected input/output. No execution-policy change is made. Existing profile GUIDs, Slate Glass and 62% opacity are preserved. Setup makes Workstation the default in stable Windows Terminal settings, preserving comments and other settings and keeping the original settings in `settings.json.workstation-backup` before the first change.
+There are two scripts under `host/windows/terminal/`: use `wvm terminal install` for installation and configuration; `PowerShell-Profile.ps1` is the runtime profile copied by the installer and loaded automatically in each new Workstation tab. The runtime loads Starship and available PSReadLine settings. Configuration uses `%LOCALAPPDATA%\Workstation\Terminal`; existing `$PROFILE` files remain untouched. Console-only PSReadLine configuration is skipped with redirected input/output. No execution-policy change is made. Existing profile GUIDs, Slate Glass and 62% opacity are preserved. Setup makes Workstation the default in stable Windows Terminal settings, preserving comments and other settings and keeping the original settings in `settings.json.workstation-backup` before the first change.
 
 Setup records the resolved Starship executable in `%LOCALAPPDATA%\Workstation\Terminal\runtime.json`. Both PowerShell profiles initialize Starship using that absolute path, so a new Terminal tab can refresh its environment without losing the prompt. If Starship is moved or reinstalled elsewhere, rerun terminal setup to refresh the recorded path. Opening a terminal does not install applications or change persistent PATH settings.

@@ -12,7 +12,8 @@ function New-WVMUbuntuCloneSeed([object]$Record, [string]$Directory, [string]$Pu
             @{path='/etc/sudoers.d/90-workstation';owner='root:root';permissions='0440';content=("$user ALL=(ALL) NOPASSWD:ALL`n")},
             @{path='/etc/ssh/sshd_config.d/00-workstation.conf';owner='root:root';permissions='0600';content=("PermitRootLogin no`nPasswordAuthentication no`nKbdInteractiveAuthentication no`nAllowAgentForwarding no`nX11Forwarding no`nAllowUsers $user`n")}
         )
-        runcmd = @('passwd -l root', "install -d -o $user -g $user /home/$user/.local/state/workstation-bootstrap/$token", 'systemctl restart hv-kvp-daemon', 'systemctl is-active --quiet hv-kvp-daemon', 'systemctl restart ssh')
+        # install -d assigns ownership only to explicit operands, not implicit parents.
+        runcmd = @('passwd -l root', "install -d -o $user -g $user /home/$user/.local /home/$user/.local/state /home/$user/.local/state/workstation-bootstrap /home/$user/.local/state/workstation-bootstrap/$token", 'systemctl restart hv-kvp-daemon', 'systemctl is-active --quiet hv-kvp-daemon', 'systemctl restart ssh')
     }
     $source = Join-Path $Directory 'source'
     if (Test-Path -LiteralPath $source) { throw 'Incomplete clone seed source retained; inspect before retrying.' }

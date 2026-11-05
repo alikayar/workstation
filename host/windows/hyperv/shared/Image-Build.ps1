@@ -59,11 +59,14 @@ function Complete-WVMImageBuild([string]$RecordPath, [switch]$Resume) {
             $preference = $ErrorActionPreference
             try {
                 $ErrorActionPreference = 'Continue'
-                $output = @(& $ssh @options $target ('sudo -n sh '+$remote+' '+$record.ImageID+' '+$record.Token+' wvmimage'))
+                $output = @(& $ssh @options $target ('sudo -n sh '+$remote+' '+$record.ImageID+' '+$record.Token+' wvmimage') 2>&1)
                 $exitCode = $LASTEXITCODE
             } finally { $ErrorActionPreference = $preference }
             $marker = 'WORKSTATION-IMAGE-SEALED:'+$record.ImageID+':'+$record.Token
-            if ($exitCode -notin @(0,255) -or @($output | Where-Object { [string]$_ -ceq $marker }).Count -ne 1) { throw 'Ubuntu sealing was not attested by its pinned session; image retained, not published.' }
+            if ($exitCode -notin @(0,255) -or @($output | Where-Object { [string]$_ -ceq $marker }).Count -ne 1) {
+                foreach ($line in $output) { Write-Host ([string]$line) }
+                throw "Ubuntu sealing was not attested by its pinned session (SSH exit $exitCode); image retained, not published."
+            }
             $record.SealAttested = $true; Save-WVMRecord $record
         }
         $deadline = (Get-Date).AddMinutes(70)

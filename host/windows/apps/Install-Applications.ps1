@@ -28,5 +28,4 @@ if (-not $code) {
 } else { $codePath = $code.Source }
 if (-not (Test-Path -LiteralPath $codePath)) { throw 'VS Code CLI was not found after installation.' }
 
-& (Join-Path $PSScriptRoot 'terminal\Install-Terminal.ps1')
-Write-Host 'VS Code and the Workstation terminal profiles are ready.'
+Write-Host 'VS Code is ready.'

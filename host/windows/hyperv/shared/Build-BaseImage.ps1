@@ -116,7 +116,16 @@ try {
     }
     if(-not $record.Generalized){throw 'Only a generalized, attested image may be published.'}
     $vm=Get-VM|Where-Object Name -eq $record.Name
-    if($vm){$vm=Get-WVMBuilder $record;if($vm.State -ne 'Off'){throw 'Generalized builder must remain Off.'}}
+    if($vm){
+        Assert-WVMRecord $record
+        if([string]$vm.Id -cne $record.VMId -or $vm.Notes -cne ('Workstation '+$record.Guest+' VM '+$record.Token)){throw 'Generalized builder identity changed.'}
+        if($vm.State -ne 'Off'){throw 'Generalized builder must remain Off.'}
+        if(@(Get-VMSnapshot -VM $vm).Count){throw 'Generalized builder has unexpected checkpoints.'}
+        $drives=@(Get-VMHardDiskDrive -VM $vm)
+        if($drives.Count -ne 1 -or $drives[0].Path -ine $record.DiskPath){throw 'Generalized builder disk attachment changed.'}
+        # Packer may remove its temporary disk after the host hook has sealed it.
+        # Publication below verifies the retained sealed copy, not that temporary file.
+    }
     $disk=Join-Path $root 'sealed.vhdx'
     Assert-PackerPath $disk
     if($record.SealedDiskSha256 -cnotmatch '^[a-fA-F0-9]{64}$' -or (Get-FileHash -LiteralPath $disk).Hash -cne $record.SealedDiskSha256){throw 'Sealed disk fingerprint differs; publication refused.'}

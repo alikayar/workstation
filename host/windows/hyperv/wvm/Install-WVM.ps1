@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-Installs a per-user wvm dispatcher pointing to this checkout; no VM is changed.
+Installs the wvm command pointing to this checkout; no host packages or VMs are installed.
 #>
 [CmdletBinding()]
 param()
@@ -34,7 +34,7 @@ if (Test-Path -LiteralPath $installedEntry) {
     if ($lines.Count -lt 2 -or $lines[1] -cne '# Workstation managed wvm dispatcher v1') { throw 'Existing wvm.ps1 is not managed by Workstation; file preserved.' }
 }
 foreach ($command in @(Get-Command wvm -All -ErrorAction SilentlyContinue)) {
-    if ($command.CommandType -ne 'Application' -or $command.Source -ine $launcher) { throw 'Another wvm command already exists; it was not replaced.' }
+    if (-not (($command.CommandType -eq 'Application' -and $command.Source -ieq $launcher) -or ($command.CommandType -eq 'ExternalScript' -and $command.Source -ieq $installedEntry))) { throw 'Another wvm command already exists; it was not replaced.' }
 }
 $content = @(
     '@echo off', $marker, 'setlocal DisableDelayedExpansion',
@@ -50,7 +50,20 @@ function Save-WVMFile([string]$Path, [string]$Content, [Text.Encoding]$Encoding 
         else { [IO.File]::Move($temporary, $Path) }
     } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary } }
 }
-$entryText = [IO.File]::ReadAllText($entry)
+$entryText = @'
+#Requires -Version 5.1
+# Workstation managed wvm dispatcher v1
+$ErrorActionPreference = 'Stop'
+$location = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'wvm-location.json') -Raw | ConvertFrom-Json
+if ($location.Schema -ne 1 -or $location.ManagedBy -cne 'Workstation wvm' -or $location.SourceRoot -notmatch '^[a-zA-Z]:[\\/]') {
+    throw 'Invalid wvm location record; rerun Install-WVM.ps1.'
+}
+$entry = Join-Path $location.SourceRoot 'wvm\wvm.ps1'
+if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw 'Checkout entry is missing; rerun Install-WVM.ps1 from its new location.' }
+# Native -File preserves command-line option parsing without evaluating user text.
+& "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File $entry @args
+exit $LASTEXITCODE
+'@
 # Keep Unicode checkout paths out of CMD; PowerShell reads them from the UTF-8 record.
 $location = @{ Schema = 1; ManagedBy = 'Workstation wvm'; SourceRoot = $sourceRoot }
 Save-WVMFile $locationPath ($location | ConvertTo-Json)

@@ -2,11 +2,11 @@
 # Workstation managed wvm dispatcher v1
 <#
 .SYNOPSIS
-Selects a guest OS and runs its existing Hyper-V installation command.
+The user entry point for Workstation host setup, base images and VM lifecycle.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [Parameter(Position = 0)][ValidateSet('create', 'list', 'start', 'stop', 'delete', 'image', 'help')][string]$Command = 'help',
+    [Parameter(Position = 0)][ValidateSet('create', 'list', 'start', 'stop', 'delete', 'image', 'host', 'terminal', 'configure', 'help')][string]$Command = 'help',
     [ValidateSet('ubuntu-26-04', 'windows-pro')][string]$OS,
     [Parameter(Position = 1)][string]$VMName,
     [string]$VMRoot,
@@ -19,6 +19,7 @@ param(
     [string]$UserName,
     [switch]$NestedVirtualization,
     [switch]$OpenConsole,
+    [switch]$ConfigureWorkstation,
     [switch]$Force
 )
 $ErrorActionPreference = 'Stop'
@@ -26,21 +27,24 @@ Set-StrictMode -Version Latest
 
 if ($Command -eq 'help') {
     Write-Output @'
+wvm terminal install               Install/configure PowerShell, Terminal and Starship.
+wvm host install                   Install VS Code and configure the terminal.
 wvm create                         Select Ubuntu Server 26.04 or Windows 11 Pro.
 wvm create -OS ubuntu-26-04         Create or resume an Ubuntu VM.
 wvm create -OS windows-pro          Create or resume a Windows VM.
+wvm configure NAME                 Apply/retry Workstation Ansible inside Ubuntu.
 wvm list                           List all local Hyper-V VMs without changing them.
 wvm start NAME                     Start the exact named VM; optionally -OpenConsole.
 wvm stop NAME                      Shut down the exact named VM normally.
-wvm delete NAME                    Delete a Workstation-owned VM and its files (asks).
-wvm delete NAME -WhatIf             Preview ownership and deletion checks.
+wvm delete NAME                    Delete the named VM and its exclusive disks/files (asks).
+wvm delete NAME -WhatIf             Preview VM identity and shared-disk checks.
 wvm delete NAME -Force              Explicitly allow power-off before confirmed deletion.
 wvm image build -OS windows-pro    Build/reuse a versioned generalized Windows base.
 wvm image build -OS ubuntu-26-04   Build/reuse a versioned clean Ubuntu base.
 wvm image list                    List published base images.
 wvm help                           Show this help.
 
-Run create/start/stop/delete in administrator, 64-bit PowerShell on Windows 11 x64.
+Run host/terminal install in normal PowerShell; VM/image commands require administrator PowerShell.
 Optional: -VMName -VMRoot -IsoPath -SwitchName -CPUs -MemoryGB -DiskGB
           -UserName -OpenConsole
 Windows only: -NestedVirtualization
@@ -52,6 +56,7 @@ Passwords are requested by the selected installer, never command-line arguments.
 if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitProcess -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
     throw 'Run wvm in 64-bit PowerShell on Windows 11 x64.'
 }
+if ($Command -ne 'create' -and $PSBoundParameters.ContainsKey('ConfigureWorkstation')) { throw '-ConfigureWorkstation applies only to create.' }
 if ($Command -eq 'create' -and ($WhatIfPreference -or $PSBoundParameters.ContainsKey('WhatIf') -or $PSBoundParameters.ContainsKey('Force'))) { throw '-WhatIf and -Force are not supported for create.' }
 if ($Command -in @('start','stop','delete')) {
     if ([string]::IsNullOrWhiteSpace($VMName)) { throw "Supply the exact VM name: wvm $Command NAME" }
@@ -61,7 +66,7 @@ if ($Command -in @('start','stop','delete')) {
     if ($Command -ne 'start' -and $OpenConsole) { throw '-OpenConsole applies only to create/start.' }
     if ($Command -ne 'delete' -and $Force) { throw '-Force applies only to delete; stop always requests normal shutdown.' }
 }
-if ($Command -in @('list','start','stop','delete','image') -and $PSVersionTable.PSEdition -eq 'Core') {
+if ($Command -in @('list','start','stop','delete','image','configure') -and $PSVersionTable.PSEdition -eq 'Core') {
     $parameters = @{}
     foreach ($entry in $PSBoundParameters.GetEnumerator()) {
         $parameters[$entry.Key] = if ($entry.Value -is [Management.Automation.SwitchParameter]) { [bool]$entry.Value } else { $entry.Value }
@@ -74,11 +79,18 @@ if ($Command -in @('list','start','stop','delete','image') -and $PSVersionTable.
     return
 }
 $sourceRoot = Split-Path -Parent $PSScriptRoot
-$locationPath = Join-Path $PSScriptRoot 'wvm-location.json'
-if (Test-Path -LiteralPath $locationPath) {
-    $location = Get-Content -LiteralPath $locationPath -Raw | ConvertFrom-Json
-    if ($location.Schema -ne 1 -or $location.ManagedBy -cne 'Workstation wvm' -or $location.SourceRoot -notmatch '^[a-zA-Z]:[\\/]') { throw 'Invalid wvm location record; rerun Install-WVM.ps1.' }
-    $sourceRoot = $location.SourceRoot
+if ($Command -in @('host','terminal')) {
+    if ($VMName -cne 'install') { throw "Use wvm $Command install." }
+    foreach ($name in $PSBoundParameters.Keys) {
+        if ($name -notin @('Command','VMName')) { throw "-$name is not supported for wvm $Command install." }
+    }
+    if ($WhatIfPreference) { throw 'Host setup does not support WhatIf.' }
+    $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run host/terminal setup in a normal PowerShell window.' }
+    $windowsRoot = Split-Path -Parent $sourceRoot
+    if ($Command -eq 'host') { & (Join-Path $windowsRoot 'apps\Install-Applications.ps1') }
+    & (Join-Path $windowsRoot 'terminal\Install-Terminal.ps1')
+    return
 }
 if ($Command -eq 'list') {
     foreach ($name in @('OS', 'VMName', 'VMRoot', 'IsoPath', 'SwitchName', 'CPUs', 'MemoryGB', 'DiskGB', 'UserName', 'NestedVirtualization', 'OpenConsole', 'Force', 'ImageRoot')) {
@@ -101,6 +113,18 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     throw 'Run this wvm command in an administrator PowerShell window. No VM was changed.'
 }
 
+if ($Command -eq 'configure') {
+    foreach ($name in $PSBoundParameters.Keys) {
+        if ($name -notin @('Command','VMName','VMRoot')) { throw "-$name is not supported for configure." }
+    }
+    if ($WhatIfPreference) { throw 'Configure does not support WhatIf.' }
+    Import-Module Hyper-V
+    . (Join-Path $sourceRoot 'shared\WVM-Lifecycle.ps1')
+    $target=Get-WVMTarget $VMName $VMRoot
+    if ($target.Guest -ne 'Ubuntu' -or $target.Record.Phase -ne 'Complete') { throw 'Create a ready Ubuntu VM before configuring Workstation.' }
+    & (Join-Path $sourceRoot 'shared\New-ImageVM.ps1') -Guest Ubuntu -VMName $VMName -VMRoot (Split-Path -Parent $target.Record.Root) -ConfigureWorkstation
+    return
+}
 if ($Command -eq 'image') {
     if ($VMName -notin @('build','list')) { throw 'Use wvm image build or wvm image list.' }
     if($WhatIfPreference -and $VMName -eq 'build'){throw 'Image builds do not support WhatIf; no builder was created.'}
@@ -136,10 +160,6 @@ if ($Command -in @('start','stop','delete')) {
         if ($PSBoundParameters.ContainsKey($name)) { $options[$name]=$PSBoundParameters[$name] }
     }
     if ($Command -eq 'delete') {
-        $target = Get-WVMTarget $VMName $VMRoot -AllowOrphan
-        if (-not $target.Record) { throw 'Only Workstation-owned VMs can be deleted.' }
-        $options.VMRoot = Split-Path -Parent $target.Record.Root
-        $options.Guest = $target.Guest
         $options.Force = $Force
         & (Join-Path $sourceRoot 'shared\Remove-OwnedVM.ps1') @options
     } else {
@@ -175,13 +195,11 @@ if ($OS -eq 'ubuntu-26-04' -and $NestedVirtualization) {
 
 $arguments = @{}
 # Forward only explicit options, so each installer keeps its own defaults and resume checks.
-foreach ($name in @('VMName', 'VMRoot', 'ImageRoot', 'IsoPath', 'SwitchName', 'CPUs', 'MemoryGB', 'DiskGB', 'UserName', 'OpenConsole')) {
+foreach ($name in @('VMName', 'VMRoot', 'ImageRoot', 'IsoPath', 'SwitchName', 'CPUs', 'MemoryGB', 'DiskGB', 'UserName', 'OpenConsole', 'ConfigureWorkstation')) {
     if ($PSBoundParameters.ContainsKey($name)) { $arguments[$name] = $PSBoundParameters[$name] }
 }
 if ($OS -eq 'windows-pro' -and $PSBoundParameters.ContainsKey('NestedVirtualization')) {
     $arguments.NestedVirtualization = $NestedVirtualization
 }
-$relativePath = if ($OS -eq 'windows-pro') { 'windows-pro\New-WindowsProVM.ps1' } else { 'ubuntu-26-04\New-UbuntuVM.ps1' }
-$target = Join-Path $sourceRoot $relativePath
-if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'The selected installer is missing. Keep the checkout in place or rerun Install-WVM.ps1 from its new location.' }
-& $target @arguments
+$arguments.Guest = if ($OS -eq 'windows-pro') { 'Windows' } else { 'Ubuntu' }
+& (Join-Path $sourceRoot 'shared\New-ImageVM.ps1') @arguments
