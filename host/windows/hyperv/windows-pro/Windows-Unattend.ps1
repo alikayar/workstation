@@ -21,35 +21,11 @@ function New-WindowsAnswerXml([Management.Automation.PSCredential]$Credential, [
     return $xml.Replace('__PASSWORD__', [Security.SecurityElement]::Escape($Credential.GetNetworkCredential().Password))
 }
 
-function New-WindowsAnswerISO([string]$Directory, [Management.Automation.PSCredential]$Credential, [string]$Token, [int]$DiskGB) {
-    Assert-PlainPath $Directory
-    if (Test-Path -LiteralPath $Directory) { throw 'Existing setup-secret directory was preserved; inspect before retrying.' }
-    $acl = New-Object Security.AccessControl.DirectorySecurity
-    $acl.SetAccessRuleProtection($true, $false)
-    foreach ($sid in @([Security.Principal.WindowsIdentity]::GetCurrent().User.Value, 'S-1-5-18', 'S-1-5-32-544')) {
-        $identity = New-Object Security.Principal.SecurityIdentifier($sid)
-        $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-    }
-    # Set the DACL at directory creation, before writing any password-bearing file.
-    [IO.Directory]::CreateDirectory($Directory, $acl) | Out-Null
-    $source = Join-Path $Directory 'source'
-    $answer = Join-Path $source 'Autounattend.xml'
-    try {
-        New-Item -ItemType Directory -Path $source | Out-Null
-        [IO.File]::WriteAllText($answer, (New-WindowsAnswerXml $Credential $Token $DiskGB), (New-Object Text.UTF8Encoding($false)))
-        New-VMSeedISO -Directory $source -Destination (Join-Path $Directory 'answer.iso')
-    } finally {
-        if (Test-Path -LiteralPath $answer) { Remove-Item -LiteralPath $answer -Force }
-        if (Test-Path -LiteralPath $source) { Remove-Item -LiteralPath $source }
-    }
-}
-
-function Wait-WindowsSetup([guid]$VMId, [string]$Token, [string]$DiskPath, [Management.Automation.PSCredential]$Credential, [scriptblock]$AssertActive) {
+function Wait-WindowsSetup([guid]$VMId, [string]$Token, [string]$DiskPath, [Management.Automation.PSCredential]$Credential) {
     Write-Host 'Waiting for Windows Setup (up to 45 minutes). Ctrl+C retains the VM for resume.'
     $deadline = (Get-Date).AddMinutes(45)
     $nextUpdate = Get-Date
     do {
-        if ($AssertActive) { & $AssertActive }
         $vm = Get-VM -Id $VMId
         if ($vm.Notes -cne ('Workstation Windows VM ' + $Token)) { throw 'VM identity changed while waiting; setup media retained.' }
         $disks = @(Get-VMHardDiskDrive -VM $vm)

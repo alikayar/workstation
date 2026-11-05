@@ -117,7 +117,7 @@ function Test-UbuntuAdapterGuards([object]$Adapter) {
 }
 
 function Set-UbuntuNetworkPolicy([object]$Record) {
-    $vm = Get-UbuntuOwnedVM $Record
+    $vm = Get-WVMOwnedVM $Record
     if ($vm.State -ne 'Off') { throw 'Shut down this Ubuntu VM normally before installing or refreshing network isolation. No forced power-off was attempted.' }
     $topology = Get-UbuntuNetworkTopology $Record.SwitchName
     $adapter = @(Get-VMNetworkAdapter -VM $vm)[0]
@@ -155,7 +155,7 @@ function Set-UbuntuNetworkPolicy([object]$Record) {
         catch { throw ('Hyper-V rejected network rule ' + (Get-UbuntuNetworkRuleKey $rule) + ': ' + $_.Exception.Message) }
     }
     Assert-UbuntuNetworkRules (Get-UbuntuAdapterRules $adapter) $extended $mac -Exact
-    $vm = Get-UbuntuOwnedVM $Record
+    $vm = Get-WVMOwnedVM $Record
     if ($vm.State -ne 'Off' -or -not (Test-UbuntuAdapterGuards (@(Get-VMNetworkAdapter -VM $vm)[0]))) { throw 'VM state or network guards changed during policy installation; no successful policy was recorded.' }
     if (($topology | ConvertTo-Json -Depth 6 -Compress) -cne ((Get-UbuntuNetworkTopology $Record.SwitchName) | ConvertTo-Json -Depth 6 -Compress)) { throw 'Host topology changed during policy installation; VM left Off. Rerun setup.' }
     $state.Phase = 'Applied'; $state.Extended = $extended; $state.Mac = $mac
@@ -163,7 +163,7 @@ function Set-UbuntuNetworkPolicy([object]$Record) {
 }
 
 function Assert-UbuntuNetworkPolicy([object]$Record) {
-    $vm = Get-UbuntuOwnedVM $Record
+    $vm = Get-WVMOwnedVM $Record
     $adapter = @(Get-VMNetworkAdapter -VM $vm)[0]
     $path = Join-Path $Record.Root 'network-policy.json'
     Assert-UbuntuPath $path

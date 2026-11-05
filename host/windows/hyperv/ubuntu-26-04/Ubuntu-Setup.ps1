@@ -171,6 +171,26 @@ function Set-UbuntuSSHConfig([object]$Record) {
     } finally { if ($locked) { $mutex.ReleaseMutex() }; $mutex.Dispose() }
 }
 
+function Remove-UbuntuSSHConfig([object]$Record) {
+    if ($Record.Token -cnotmatch '^[a-f0-9]{32}$') { throw 'Invalid SSH block ownership token.' }
+    $path = Join-Path $HOME '.ssh\config'
+    Assert-UbuntuPath $path
+    $mutex = New-Object Threading.Mutex($false, ('Global\Workstation-SSHConfig-' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value))
+    $locked = $false
+    try {
+        try { $locked = $mutex.WaitOne(30000) } catch [Threading.AbandonedMutexException] { $locked = $true }
+        if (-not $locked) { throw 'Another process is updating SSH config; retry deletion.' }
+        if (-not (Test-Path -LiteralPath $path)) { return }
+        $text = [IO.File]::ReadAllText($path)
+        $begin = '# BEGIN Workstation Ubuntu ' + $Record.Token
+        $end = '# END Workstation Ubuntu ' + $Record.Token
+        $pattern = '(?ms)^' + [regex]::Escape($begin) + '\r?\n.*?^' + [regex]::Escape($end) + '(?:\r?\n|$)'
+        $blocks = [regex]::Matches($text, $pattern)
+        if ($blocks.Count -gt 1 -or (($text.Contains($begin) -or $text.Contains($end)) -and $blocks.Count -ne 1)) { throw 'Managed SSH markers differ; config and deletion journal retained.' }
+        if ($blocks.Count) { Save-UbuntuText $path ([regex]::Replace($text, $pattern, '')) }
+    } finally { if ($locked) { $mutex.ReleaseMutex() }; $mutex.Dispose() }
+}
+
 function Wait-UbuntuAddress([object]$Record, [string]$IdentityFile, [string]$KnownHostsFile) {
     $ssh = Join-Path ([Environment]::SystemDirectory) 'OpenSSH\ssh.exe'
     $alias = 'workstation-ubuntu-' + $Record.Token

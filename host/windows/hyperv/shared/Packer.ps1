@@ -86,7 +86,7 @@ function Get-WorkstationPacker {
 }
 
 
-function Invoke-WorkstationPacker([string]$Root, [string]$VMName, [string]$Template, [hashtable]$Variables, [scriptblock]$WhileRunning, [scriptblock]$BeforeBuild) {
+function Invoke-WorkstationPacker([string]$Root, [string]$VMName, [string]$Template, [hashtable]$Variables, [scriptblock]$BeforeBuild) {
     foreach ($path in @($Root, $Template)) { Assert-PackerPath $path }
     Assert-PackerIdle $Root
     $packer = Get-WorkstationPacker
@@ -127,12 +127,9 @@ function Invoke-WorkstationPacker([string]$Root, [string]$VMName, [string]$Templ
         $processPath = Join-Path $Root 'packer-process.json'
         try {
             Save-PackerText $processPath (@{ Id = $process.Id; Started = $process.StartTime.ToUniversalTime().Ticks } | ConvertTo-Json)
-            if ($WhileRunning) { & $WhileRunning $process }
             if (-not $process.WaitForExit(3600000)) { throw 'Packer did not exit within one hour; VM and active-process record retained.' }
             if ($process.ExitCode -ne 0) { throw 'Packer stopped. VM and recovery files retained; resume the recorded guest without rebuilding.' }
         } finally {
-            # A credential-owning parent may fail or be cancelled. Terminate only its Packer process, never the guest.
-            if ($WhileRunning -and -not $process.HasExited) { $process.Kill(); $null = $process.WaitForExit(5000) }
             if ($process.HasExited -and (Test-Path -LiteralPath $processPath)) { Remove-Item -LiteralPath $processPath }
             $process.Dispose()
         }
@@ -142,41 +139,4 @@ function Invoke-WorkstationPacker([string]$Root, [string]$VMName, [string]$Templ
             [Environment]::SetEnvironmentVariable($name, $value, 'Process')
         }
     }
-}
-
-function Remove-WorkstationPackerExport([object]$Record) {
-    $directory = Join-Path $Record.Root 'export'
-    Assert-PackerPath $directory
-    if (-not (Test-Path -LiteralPath $directory)) { return }
-    $boundary = [IO.Path]::GetFullPath($directory).TrimEnd('\') + '\'
-    foreach ($vm in @(Get-VM)) {
-        $versions = @(@{ VM = $vm; Snapshot = $false })
-        $versions += @(Get-VMSnapshot -VM $vm | ForEach-Object { @{ VM = $_; Snapshot = $true } })
-        foreach ($version in $versions) {
-            $configuration = [IO.Path]::GetFullPath($version.VM.Path).TrimEnd('\')
-            if ($configuration -ieq $directory -or $configuration.StartsWith($boundary, [StringComparison]::OrdinalIgnoreCase)) { throw 'A VM or checkpoint uses the temporary export; files retained.' }
-            $disks = if ($version.Snapshot) { @(Get-VMHardDiskDrive -VMSnapshot $version.VM) } else { @(Get-VMHardDiskDrive -VM $version.VM) }
-            $dvds = if ($version.Snapshot) { @(Get-VMDvdDrive -VMSnapshot $version.VM) } else { @(Get-VMDvdDrive -VM $version.VM) }
-            foreach ($dvd in $dvds) { if ($dvd.Path -and [IO.Path]::GetFullPath($dvd.Path).StartsWith($boundary, [StringComparison]::OrdinalIgnoreCase)) { throw 'A VM references temporary export media; files retained.' } }
-            foreach ($disk in $disks) {
-                $path = $disk.Path; $seen = @{}
-                while ($path) {
-                    $path = [IO.Path]::GetFullPath($path)
-                    if ($path.StartsWith($boundary, [StringComparison]::OrdinalIgnoreCase)) { throw 'A VM disk chain uses the temporary export; files retained.' }
-                    if ($seen.ContainsKey($path)) { throw 'Disk-chain cycle; export cleanup refused.' }
-                    $seen[$path] = $true; $path = (Get-VHD -Path $path).ParentPath
-                }
-            }
-        }
-    }
-    $pending = New-Object 'Collections.Generic.Stack[string]'
-    $pending.Push($directory)
-    while ($pending.Count) {
-        foreach ($item in @(Get-ChildItem -LiteralPath $pending.Pop() -Force)) {
-            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked export content; cleanup refused.' }
-            if ($item.PSIsContainer) { $pending.Push($item.FullName) }
-        }
-    }
-    # Only the redundant Packer export; the registered VM keeps its original disks.
-    Remove-Item -LiteralPath $directory -Recurse -Force
 }
