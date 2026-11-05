@@ -6,6 +6,25 @@ function Assert-PlainPath([string]$Path) {
     }
 }
 
+function Assert-WindowsProImage([object]$Media) {
+    $mounted = $false
+    try {
+        $image = Get-DiskImage -ImagePath $Media.Path
+        if (-not $image.Attached) { $image = Mount-DiskImage -ImagePath $Media.Path -PassThru; $mounted = $true }
+        $volumes = @($image | Get-Volume | Where-Object DriveLetter)
+        if ($volumes.Count -ne 1) { throw 'Expected one installation-media volume.' }
+        $root = [string]$volumes[0].DriveLetter + ':\'
+        $signature = Get-AuthenticodeSignature -LiteralPath (Join-Path $root 'setup.exe')
+        if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') { throw 'Windows Setup must have a valid Microsoft signature.' }
+        $wim = Join-Path $root 'sources\install.wim'
+        if (-not (Test-Path -LiteralPath $wim)) { $wim = Join-Path $root 'sources\install.esd' }
+        $pro = @(Get-WindowsImage -ImagePath $wim | Where-Object ImageName -eq 'Windows 11 Pro')
+        if ($pro.Count -ne 1) { throw 'Expected Windows 11 Pro, not Enterprise or Pro N.' }
+        $detail = Get-WindowsImage -ImagePath $wim -Index $pro[0].ImageIndex
+        if ($detail.EditionId -ne 'Professional' -or [int]$detail.Architecture -ne 9 -or [version]$detail.Version -ne [version]$Media.Version) { throw 'Expected the pinned Windows 11 Pro x64 build 26200.6584.' }
+    } finally { if ($mounted) { Dismount-DiskImage -ImagePath $Media.Path | Out-Null } }
+}
+
 function Get-WindowsProMedia([string]$IsoPath) {
     # Pin the bytes, not the current release offered by Microsoft's download page.
     $media = [pscustomobject]@{

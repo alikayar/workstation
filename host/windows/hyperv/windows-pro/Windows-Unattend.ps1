@@ -44,11 +44,12 @@ function New-WindowsAnswerISO([string]$Directory, [Management.Automation.PSCrede
     }
 }
 
-function Wait-WindowsSetup([guid]$VMId, [string]$Token, [string]$DiskPath, [Management.Automation.PSCredential]$Credential) {
-    Write-Host 'Waiting for Windows Setup (up to 45 minutes). Press a key to boot from DVD once if prompted. Ctrl+C retains the VM for resume.'
+function Wait-WindowsSetup([guid]$VMId, [string]$Token, [string]$DiskPath, [Management.Automation.PSCredential]$Credential, [scriptblock]$AssertActive) {
+    Write-Host 'Waiting for Windows Setup (up to 45 minutes). Ctrl+C retains the VM for resume.'
     $deadline = (Get-Date).AddMinutes(45)
     $nextUpdate = Get-Date
     do {
+        if ($AssertActive) { & $AssertActive }
         $vm = Get-VM -Id $VMId
         if ($vm.Notes -cne ('Workstation Windows VM ' + $Token)) { throw 'VM identity changed while waiting; setup media retained.' }
         $disks = @(Get-VMHardDiskDrive -VM $vm)

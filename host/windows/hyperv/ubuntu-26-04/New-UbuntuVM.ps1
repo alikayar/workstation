@@ -169,6 +169,7 @@ try {
             'Ubuntu-Setup.ps1' = Join-Path $PSScriptRoot 'Ubuntu-Setup.ps1'
             'Ubuntu-Packer.ps1' = Join-Path $PSScriptRoot 'Ubuntu-Packer.ps1'
             'Ubuntu-Network.ps1' = Join-Path $PSScriptRoot 'Ubuntu-Network.ps1'
+            'Packer.ps1' = Join-Path $PSScriptRoot '..\shared\Packer.ps1'
             'finalize-account.sh' = Join-Path $PSScriptRoot 'finalize-account.sh'
         }
         $hashes = @{}

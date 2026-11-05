@@ -35,6 +35,7 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
 }
 Import-Module Hyper-V
 . (Join-Path $PSScriptRoot 'Windows-Media.ps1')
+. (Join-Path $PSScriptRoot '..\shared\Packer.ps1')
 if ($VMRoot -notmatch '^[a-zA-Z]:[\\/]') { throw 'VMRoot must be an absolute local drive path.' }
 $VMRoot = [IO.Path]::GetFullPath($VMRoot).TrimEnd('\')
 $root = Join-Path $VMRoot $VMName
@@ -64,6 +65,7 @@ $locked = $false
 try {
     try { $locked = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked = $true }
     if (-not $locked) { throw 'A create/resume/delete command is still using this VM. Stop that command before deleting; -Force does not override its lock.' }
+    Assert-PackerIdle $root
     Assert-WindowsVMDirectory
     Assert-PlainPath $journalPath
     Assert-PlainPath $recordPath
@@ -79,7 +81,8 @@ try {
     $journalText = if ($journalExists) { Get-Content -LiteralPath $journalPath -Raw } else { $null }
     $markerText = if ($markerExists) { Get-Content -LiteralPath $recordPath -Raw } else { $null }
     $record = if ($journalExists) { $journalText | ConvertFrom-Json } else { $markerText | ConvertFrom-Json }
-    if ($record.Schema -notin @(1, 2) -or $record.OwnerSID -cne $owner -or $record.Name -ine $VMName -or $record.Root -ine $root -or $record.Token -notmatch '^[a-f0-9]{32}$') { throw 'VM deletion ownership differs; files preserved.' }
+    if ($record.Schema -eq 3 -and $record.Backend -cne 'Packer') { throw 'Unexpected Windows backend; files preserved.' }
+    if ($record.Schema -notin @(1, 2, 3) -or $record.OwnerSID -cne $owner -or $record.Name -ine $VMName -or $record.Root -ine $root -or $record.Token -notmatch '^[a-f0-9]{32}$') { throw 'VM deletion ownership differs; files preserved.' }
     if ($record.VMId -and $record.VMId -notmatch '^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$') { throw 'Invalid recorded VM identity.' }
     if ($journalExists -and $markerExists) {
         $marker = $markerText | ConvertFrom-Json
@@ -136,6 +139,7 @@ try {
         }
         Remove-VM -VM $current -Force -Confirm:$false
     }
+    Assert-PackerIdle $root
     Assert-WindowsVMDirectory
     if ([IO.Path]::GetFullPath($root) -ine (Join-Path $VMRoot $VMName)) { throw 'Unexpected deletion target.' }
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -Confirm:$false }

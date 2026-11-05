@@ -1,3 +1,7 @@
+$packerRuntime = Join-Path $PSScriptRoot 'Packer.ps1'
+if (-not (Test-Path -LiteralPath $packerRuntime)) { $packerRuntime = Join-Path $PSScriptRoot '..\shared\Packer.ps1' }
+. $packerRuntime
+
 function Assert-UbuntuBuildIdle([string]$Root) {
     foreach ($name in @('packer-process.json', 'setup-process.json')) {
         $path = Join-Path $Root $name
@@ -11,68 +15,13 @@ function Assert-UbuntuBuildIdle([string]$Root) {
 
 function Assert-UbuntuPayload([object]$Record) {
     $properties = @($Record.PayloadHashes.PSObject.Properties)
-    if ($properties.Count -ne 4) { throw 'Saved Packer recovery payload is incomplete.' }
+    $names = @($properties | ForEach-Object Name)
+    if ($properties.Count -lt 4 -or $properties.Count -gt 6 -or @(@('ubuntu.pkr.hcl', 'Ubuntu-Setup.ps1', 'Ubuntu-Packer.ps1', 'finalize-account.sh') | Where-Object { $_ -cnotin $names }).Count) { throw 'Saved Packer recovery payload is incomplete.' }
     foreach ($entry in $properties) {
-        if ($entry.Name -notin @('ubuntu.pkr.hcl', 'Ubuntu-Setup.ps1', 'Ubuntu-Packer.ps1', 'finalize-account.sh') -or $entry.Value -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid saved Packer payload entry.' }
+        if ($entry.Name -notin @('ubuntu.pkr.hcl', 'Ubuntu-Setup.ps1', 'Ubuntu-Packer.ps1', 'Ubuntu-Network.ps1', 'Packer.ps1', 'finalize-account.sh') -or $entry.Value -cnotmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid saved Packer payload entry.' }
         $path = Join-Path (Join-Path $Record.Root 'payload') $entry.Name
         Assert-UbuntuPath $path
         if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne $entry.Value) { throw 'Saved Packer payload changed; installation retained.' }
-    }
-}
-function Get-UbuntuPacker {
-    $directory = Join-Path $env:ProgramData 'Workstation\Tools\Packer\1.16.2'
-    Assert-UbuntuPath $directory
-    $mutex = New-Object Threading.Mutex($false, 'Global\Workstation-Packer-1.16.2')
-    $locked = $false
-    $protocol = [Net.ServicePointManager]::SecurityProtocol
-    $partial = $null; $zip = $null
-    try {
-        try { $locked = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked = $true }
-        if (-not $locked) { throw 'Another process is preparing Packer. Retry after it finishes.' }
-        if (-not (Test-Path -LiteralPath $directory)) {
-            $acl = New-Object Security.AccessControl.DirectorySecurity
-            $acl.SetAccessRuleProtection($true, $false)
-            $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
-            foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
-                $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($sid)), 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-            }
-            [IO.Directory]::CreateDirectory($directory, $acl) | Out-Null
-        }
-        $acl = Get-Acl -LiteralPath $directory
-        if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin @('S-1-5-18', 'S-1-5-32-544')) { throw 'Packer directory has an unexpected owner; retained for inspection.' }
-        foreach ($rule in $acl.Access) {
-            if ($rule.AccessControlType -eq 'Allow' -and ($rule.FileSystemRights -band [Security.AccessControl.FileSystemRights]::Write) -and $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -notin @('S-1-5-18', 'S-1-5-32-544')) { throw 'Packer directory permits unprivileged writes; retained for inspection.' }
-        }
-        $archive = Join-Path $directory 'packer.zip'
-        Assert-UbuntuPath $archive
-        [Net.ServicePointManager]::SecurityProtocol = $protocol -bor [Net.SecurityProtocolType]::Tls12
-        if (-not (Test-Path -LiteralPath $archive)) {
-            $partial = $archive + '.' + [guid]::NewGuid().ToString('N') + '.partial'
-            $ProgressPreference = 'SilentlyContinue'
-            Write-Host 'Downloading pinned Packer 1.16.2 for Workstation (no PATH changes)...'
-            Invoke-WebRequest -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 600 -Uri 'https://releases.hashicorp.com/packer/1.16.2/packer_1.16.2_windows_amd64.zip' -OutFile $partial
-            if ((Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash -ine '1b3984ae7f5954cc3ae416b527ae5c5a747ea7bb7977366038609199be4a2710') { throw 'Packer archive checksum mismatch.' }
-            [IO.File]::Move($partial, $archive)
-        }
-        if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ine '1b3984ae7f5954cc3ae416b527ae5c5a747ea7bb7977366038609199be4a2710') { throw 'Cached Packer archive checksum mismatch; file retained.' }
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $zip = [IO.Compression.ZipFile]::OpenRead($archive)
-        $entry = $zip.GetEntry('packer.exe')
-        if (-not $entry) { throw 'Pinned Packer archive is missing packer.exe.' }
-        $hasher = [Security.Cryptography.SHA256]::Create()
-        $stream = $entry.Open()
-        try { $expected = [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '') }
-        finally { $stream.Dispose(); $hasher.Dispose() }
-        $executable = Join-Path $directory 'packer.exe'
-        Assert-UbuntuPath $executable
-        if (-not (Test-Path -LiteralPath $executable)) { [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $executable, $false) }
-        if ((Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash -ine $expected) { throw 'Packer executable differs from the pinned archive; file retained.' }
-        return $executable
-    } finally {
-        if ($zip) { $zip.Dispose() }
-        if ($partial -and (Test-Path -LiteralPath $partial)) { Remove-Item -LiteralPath $partial }
-        [Net.ServicePointManager]::SecurityProtocol = $protocol
-        if ($locked) { $mutex.ReleaseMutex() }; $mutex.Dispose()
     }
 }
 
@@ -165,8 +114,6 @@ function Complete-UbuntuPackerBuild([string]$RecordPath) {
 }
 
 function Invoke-UbuntuPacker([object]$Record, [string]$RecordPath, [bool]$OpenConsole) {
-    $packer = Get-UbuntuPacker
-    $directory = Split-Path -Parent $packer
     $payload = Join-Path $Record.Root 'payload'
     $template = Join-Path $payload 'ubuntu.pkr.hcl'
     $commands = @{}
@@ -187,88 +134,7 @@ function Invoke-UbuntuPacker([object]$Record, [string]$RecordPath, [bool]$OpenCo
         register_command = $commands['Register-UbuntuPackerVM']; complete_command = $commands['Complete-UbuntuPackerBuild']
         headless = -not $OpenConsole
     }
-    $variablesPath = Join-Path $payload 'build.pkrvars.json'
-    Save-UbuntuText $variablesPath ($variables | ConvertTo-Json -Depth 8)
-    $saved = @{}
-    foreach ($name in @('PACKER_PLUGIN_PATH', 'PACKER_CACHE_DIR', 'PACKER_CONFIG', 'PACKER_LOG', 'PACKER_LOG_PATH', 'Path', 'PSModulePath', 'TEMP', 'TMP')) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
-    try {
-        $env:PACKER_PLUGIN_PATH = Join-Path $directory 'plugins'
-        $env:PACKER_CACHE_DIR = Join-Path $env:ProgramData 'Workstation\Media\Packer'
-        $env:PACKER_CONFIG = Join-Path $directory 'config.json'
-        $env:PACKER_LOG = '0'; $env:PACKER_LOG_PATH = $null
-        $system = [Environment]::SystemDirectory
-        $env:Path = "$system;$system\WindowsPowerShell\v1.0;$system\OpenSSH"
-        $env:PSModulePath = Join-Path $system 'WindowsPowerShell\v1.0\Modules'
-        $env:TEMP = Join-Path $Record.Root 'packer-temp'; $env:TMP = $env:TEMP
-        foreach ($path in @($env:PACKER_PLUGIN_PATH, $env:PACKER_CACHE_DIR, $env:TEMP)) { Assert-UbuntuPath $path; New-Item -ItemType Directory -Path $path -Force | Out-Null }
-        Save-UbuntuText $env:PACKER_CONFIG '{}'
-        $pluginMutex = New-Object Threading.Mutex($false, 'Global\Workstation-Packer-Plugins-1.16.2')
-        $pluginLocked = $false
-        try {
-            try { $pluginLocked = $pluginMutex.WaitOne(30000) } catch [Threading.AbandonedMutexException] { $pluginLocked = $true }
-            if (-not $pluginLocked) { throw 'Another VM is initializing Packer plugins. Retry after it finishes.' }
-            & $packer init $template
-            if ($LASTEXITCODE -ne 0) { throw 'Pinned Packer Hyper-V plugin initialization failed.' }
-        } finally { if ($pluginLocked) { $pluginMutex.ReleaseMutex() }; $pluginMutex.Dispose() }
-        & $packer validate ("-var-file=$variablesPath") $template
-        if ($LASTEXITCODE -ne 0) { throw 'Packer configuration validation failed; no build started.' }
-        # Packer must never retry creation against a guest left by a previous run.
-        if (@(Get-VM | Where-Object Name -eq $Record.Name).Count) { throw 'VM name appeared before Packer build; existing VM preserved.' }
-        $machines = Join-Path $Record.Root 'machines'
-        if ((Test-Path -LiteralPath $machines) -and @(Get-ChildItem -LiteralPath $machines -Force).Count) { throw 'Previous build files exist. Inspect them instead of creating another VM.' }
-        $Record.Phase = 'Building'; Save-UbuntuText $RecordPath ($Record | ConvertTo-Json -Depth 8)
-        $start = New-Object Diagnostics.ProcessStartInfo
-        $start.FileName = $packer
-        $start.Arguments = 'build -on-error=abort -var-file="' + $variablesPath + '" "' + $template + '"'
-        $start.UseShellExecute = $false; $start.CreateNoWindow = $false
-        $process = [Diagnostics.Process]::Start($start)
-        $processPath = Join-Path $Record.Root 'packer-process.json'
-        try {
-            Save-UbuntuText $processPath (@{ Id = $process.Id; Started = $process.StartTime.ToUniversalTime().Ticks } | ConvertTo-Json)
-            $process.WaitForExit()
-            if ($process.ExitCode -ne 0) { throw 'Packer build stopped. VM and recovery payload retained; rerun to resume the recorded guest, not rebuild it.' }
-        } finally {
-            if ($process.HasExited -and (Test-Path -LiteralPath $processPath)) { Remove-Item -LiteralPath $processPath }
-            $process.Dispose()
-        }
-    } finally {
-        foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
-    }
+    Invoke-WorkstationPacker -Root $Record.Root -VMName $Record.Name -Template $template -Variables $variables -BeforeBuild { $Record.Phase = 'Building'; Save-UbuntuText $RecordPath ($Record | ConvertTo-Json -Depth 8) }
 }
 
-function Remove-UbuntuPackerExport([object]$Record) {
-    $directory = Join-Path $Record.Root 'export'
-    Assert-UbuntuPath $directory
-    if (-not (Test-Path -LiteralPath $directory)) { return }
-    $boundary = [IO.Path]::GetFullPath($directory).TrimEnd('\') + '\'
-    foreach ($vm in @(Get-VM)) {
-        $versions = @(@{ VM = $vm; Snapshot = $false })
-        $versions += @(Get-VMSnapshot -VM $vm | ForEach-Object { @{ VM = $_; Snapshot = $true } })
-        foreach ($version in $versions) {
-            $configuration = [IO.Path]::GetFullPath($version.VM.Path).TrimEnd('\')
-            if ($configuration -ieq $directory -or $configuration.StartsWith($boundary, [StringComparison]::OrdinalIgnoreCase)) { throw 'A VM or checkpoint uses the temporary export; files retained.' }
-            $disks = if ($version.Snapshot) { @(Get-VMHardDiskDrive -VMSnapshot $version.VM) } else { @(Get-VMHardDiskDrive -VM $version.VM) }
-            $dvds = if ($version.Snapshot) { @(Get-VMDvdDrive -VMSnapshot $version.VM) } else { @(Get-VMDvdDrive -VM $version.VM) }
-            foreach ($dvd in $dvds) { if ($dvd.Path -and [IO.Path]::GetFullPath($dvd.Path).StartsWith($boundary, [StringComparison]::OrdinalIgnoreCase)) { throw 'A VM references temporary export media; files retained.' } }
-            foreach ($disk in $disks) {
-                $path = $disk.Path; $seen = @{}
-                while ($path) {
-                    $path = [IO.Path]::GetFullPath($path)
-                    if ($path.StartsWith($boundary, [StringComparison]::OrdinalIgnoreCase)) { throw 'A VM disk chain uses the temporary export; files retained.' }
-                    if ($seen.ContainsKey($path)) { throw 'Disk-chain cycle; export cleanup refused.' }
-                    $seen[$path] = $true; $path = (Get-VHD -Path $path).ParentPath
-                }
-            }
-        }
-    }
-    $pending = New-Object 'Collections.Generic.Stack[string]'
-    $pending.Push($directory)
-    while ($pending.Count) {
-        foreach ($item in @(Get-ChildItem -LiteralPath $pending.Pop() -Force)) {
-            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked export content; cleanup refused.' }
-            if ($item.PSIsContainer) { $pending.Push($item.FullName) }
-        }
-    }
-    # Only the redundant Packer export; the registered VM keeps its original disks.
-    Remove-Item -LiteralPath $directory -Recurse -Force
-}
+function Remove-UbuntuPackerExport([object]$Record) { Remove-WorkstationPackerExport $Record }
