@@ -19,7 +19,7 @@ Windows Pro VM creation requires Hyper-V to be enabled beforehand. The Ubuntu co
 | `host/windows/Install-Host.ps1` | VS Code installation and terminal setup |
 | `host/windows/terminal/` | Terminal dependencies, PowerShell startup, font and appearance |
 | `host/windows/hyperv/windows-pro/` | Windows Pro creation, unattended setup and owned-VM removal |
-| `host/windows/hyperv/ubuntu-26-04/` | Ubuntu creation, Packer recipe, SSH/account finalization and recovery |
+| `host/windows/hyperv/ubuntu-26-04/` | Ubuntu creation, Packer recipe, host-enforced network policy, SSH/account finalization and recovery |
 | `host/windows/hyperv/shared/Seed-ISO.ps1` | Shared native Windows ISO creation |
 | `host/windows/hyperv/shared/VM-Resources.ps1` | Shared numeric resource validation |
 
@@ -39,7 +39,7 @@ New installations ask for the VM name, CPU count, RAM, disk and non-root user, d
 
 Media is **Ubuntu Server 26.04.1 LTS amd64**, with SHA256 `cc8a95cde20f6ced61a322420de00f10cc3c90ced545daa46cb9c1a117f1d927`, pinned from [Canonical's checksums](https://releases.ubuntu.com/26.04/SHA256SUMS). It downloads from Canonical over HTTPS into `%ProgramData%\Workstation\Media`; an existing cache or optional `-IsoPath` must match the same hash. Packer receives the verified local ISO and checks the same pinned SHA256; its shared download cache is `%ProgramData%\Workstation\Media\Packer`. No caller-provided checksum override is accepted. Updating the pin requires a source change; this is a pinned SHA256 check, not an on-host GPG signature verification.
 
-The Generation 2 VM has one dynamic VHDX, fixed RAM, Ubuntu Secure Boot, automatic checkpoints disabled and Guest Service Interface file copy disabled by the first host provisioner. The wrapper creates the `machines` parent directory before Packer runs. Packer keeps the registered VM and its original disk under `<VMRoot>\<VMName>\machines`; the record stores the actual Hyper-V ID and disk path. It uses an existing Internal switch (normally Default Switch) for DHCP and outbound internet. It does not allocate static IPs or modify host firewall/NAT rules. Internal networking alone does **not** isolate the host or other guests from malicious code.
+The Generation 2 VM has one dynamic VHDX, fixed RAM, Ubuntu Secure Boot, automatic checkpoints disabled and Guest Service Interface file copy disabled by the first host provisioner. The wrapper creates the `machines` parent directory before Packer runs. Packer keeps the registered VM and its original disk under `<VMRoot>\<VMName>\machines`; the record stores the actual Hyper-V ID and disk path. This isolation policy requires Windows' existing **Default Switch** for DHCP, DNS and outbound NAT. Custom Internal switches are refused before downloading or creating a VM because their infrastructure services cannot safely be inferred. Host firewall/NAT configuration and other VMs are not changed.
 
 Following [Canonical's autoinstall method](https://canonical-subiquity.readthedocs-hosted.com/en/latest/howto/autoinstall-quickstart.html), the command attaches a CIDATA seed and enters the initial `autoinstall ds=nocloud` boot command through the owned VM's virtual keyboard. The installer handles English UI, Turkish Q keyboard, Europe/Istanbul timezone, the new disk, security updates and SSH without user selection screens. No HTTP seed server or inbound host firewall exception is needed. The installer refuses to partition a disk that already has partitions.
 
@@ -50,6 +50,31 @@ The host waits for a guest-reported IPv4 address, verifies its pinned SSH key an
 Ubuntu's live installer disables cloud-init after its first boot. Readiness therefore requires all four saved cloud-init stages to have finished without errors and the `boot-finished` marker, rather than requiring a current `done` status. The expected warning about leaving the bootstrap account's blank password locked is accepted; other warnings stop setup for inspection. The account password is still set only through interactive `passwd`.
 
 After successful setup, a managed block in the creating user's `~/.ssh/config` enables `ssh <VMName>` with the VM's own identity and pinned server key. Other config contents are preserved; an existing explicit alias outside this installation's block is refused. Rerunning setup refreshes the verified DHCP address and updates the same block without duplicating it. The alias does not discover a changed IP by itself: rerun `New-UbuntuVM.ps1` when the VM's DHCP address changes. Run setup as your own Windows account with elevation, rather than as a different administrator account.
+
+### Network isolation
+
+`Ubuntu-Network.ps1` owns the policy on the recorded VM's single Hyper-V adapter. It uses Microsoft's [extended port ACLs](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/create-security-policies-extended-port-access-control-lists) for stateful IP filtering and [MAC ACLs and adapter guards](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj679878(v=ws.11)) for direct peer restrictions. Guest root cannot remove these host-side rules.
+
+| Traffic | Policy |
+| --- | --- |
+| VM to public IPv4 TCP/UDP services | Allowed with return traffic tracked |
+| Host Default Switch address to VM TCP 22 | Allowed with stateful SSH replies |
+| VM to host, private/shared/link-local ranges and connected LAN prefixes | Denied, except the infrastructure traffic below |
+| VM to gateway DNS TCP/UDP 53 | Allowed; no other host application ports are opened |
+| DHCP client UDP 68 to gateway/broadcast UDP 67; gateway replies | Allowed |
+| Direct unicast Ethernet to other VM MAC addresses | Denied; gateway MAC and outbound broadcasts are the only MAC exceptions |
+| IPv6 and other IP protocols, including ICMP/ping and protocol-41 tunnels | Denied |
+| Unsolicited inbound connections | Denied, except host SSH and DHCP replies |
+
+Blocked prefixes include host IPv4 addresses and connected on-link routes, so public-address LANs are covered as well as RFC1918 networks. MAC spoofing, teaming, port mirroring and SR-IOV bypass are disabled; DHCP and router guards are enabled. Broadcasts remain necessary for ARP/DHCP on the shared switch: this is an IP access policy with peer MAC restrictions, not a private physical network or a guarantee against broadcast denial of service. Internet access can still transmit guest data to Internet services; proxies, host-configured port forwarding and hypervisor vulnerabilities are outside this policy's guarantee.
+
+The initial installer runs before this policy is applied. After verified first boot, the VM shuts down gracefully and the policy is installed **while Off**, before it restarts for account finalization. Do not run untrusted code during installation. For an existing installed VM, shut it down normally, then rerun the same `New-UbuntuVM.ps1` command; it installs the policy and resumes that VM without reinstalling Ubuntu or resetting the password. A running VM without a policy is refused, not forcibly stopped. A saved VM needing changes must first be resumed and shut down normally.
+
+`network-policy.json` records the VM, adapter, ownership token, topology and exact managed rules. Policy changes are journaled before mutation and verified by reading the adapter back. Interrupted installation leaves an `Applying` journal and the VM Off; rerun to reconcile only recorded rules. Foreign ACLs or a replaced adapter cause a refusal. An unchanged policy is not rewritten. No background service or scheduled task is installed.
+
+**Before switching Wi-Fi, VPN, host interface addresses or Default Switch configuration, shut down an untrusted VM.** Rerun setup while it is Off to refresh the topology and policy. Setup checks the topology again before starting a VM and refuses stale rules on a running/saved VM. This is not continuous network-change monitoring; starting a VM directly in Hyper-V Manager bypasses these wrapper checks. Never treat an old policy as protecting newly added public-address LANs or host addresses without refreshing it.
+
+Source parsing and offline rule/ownership/recovery checks do not establish packet filtering behavior. The live acceptance check must cover Internet DNS/HTTPS, host SSH after DHCP renewal/reboot, denied host/LAN/peer TCP and UDP, IPv6, peer MAC/ARP behavior, repeat application and an interrupted policy update. Live validation of this network policy is still pending.
 
 Reruns use the recorded VM ID, ownership token, resources and disk. They do not reinstall, reset a completed password or adopt a replaced/missing VM. The recipe, helpers and account finalizer are copied into a hashed recovery payload before building; a changed payload is refused. `packer build -on-error=abort` retains failed build state. A recorded, installed VM resumes over pinned SSH without invoking Packer again. A failure before the first Packer host provisioner records ownership requires inspection; an unrecorded VM or leftover build disk is never adopted/rebuilt automatically. Existing records from the uncommitted direct-Hyper-V prototype are also refused. Additional disks, checkpoints or changed network attachments cause a refusal. Concurrent operations on the same VM name, or a still-running recorded Packer/setup process, are refused. Switch names use letters, digits, spaces, underscores, dots or hyphens; paths containing shell expansion characters are rejected before reaching the Packer driver.
 

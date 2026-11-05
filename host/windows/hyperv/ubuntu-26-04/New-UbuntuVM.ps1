@@ -10,6 +10,8 @@ Name and resources show defaults; Enter accepts them. The sudo password is enter
 into Ubuntu's passwd over authenticated SSH after installation, never into files.
 Packer creates the VM and handles first boot; existing guests resume over SSH without
 rebuilding. PowerShell 7 delegates to 5.1. Packer and its plugin use a private tool folder.
+Host-side adapter isolation is installed while the VM is Off. An existing running VM
+without this policy must first be shut down normally. Only the Default Switch is supported.
 #>
 [CmdletBinding()]
 param(
@@ -57,6 +59,7 @@ Import-Module Hyper-V
 . (Join-Path $PSScriptRoot '..\shared\Seed-ISO.ps1')
 . (Join-Path $PSScriptRoot 'Ubuntu-Setup.ps1')
 . (Join-Path $PSScriptRoot 'Ubuntu-Packer.ps1')
+. (Join-Path $PSScriptRoot 'Ubuntu-Network.ps1')
 foreach ($tool in @('ssh.exe', 'scp.exe', 'ssh-keygen.exe')) {
     if (-not (Test-Path -LiteralPath (Join-Path ([Environment]::SystemDirectory) ('OpenSSH\' + $tool)))) { throw 'Install the Windows OpenSSH Client optional feature before running Ubuntu setup.' }
 }
@@ -111,6 +114,7 @@ try {
     if ($SwitchName -notmatch '^[a-zA-Z0-9][a-zA-Z0-9 _.-]{0,63}$') { throw 'Use a switch name containing letters, digits, spaces, underscores, dots or hyphens.' }
     $switch = Get-VMSwitch -Name $SwitchName
     if ($switch.SwitchType -ne 'Internal') { throw 'Use an existing Internal switch with DHCP and outbound internet, normally Default Switch.' }
+    $null = Get-UbuntuNetworkTopology $SwitchName
     foreach ($entry in @(
         @{ Name = 'CPUs'; Label = 'VM CPU count'; Minimum = 2; Maximum = [Math]::Min(64, $hostCPUs) },
         @{ Name = 'MemoryGB'; Label = 'VM memory (GiB)'; Minimum = 4; Maximum = 32 },
@@ -164,6 +168,7 @@ try {
             'ubuntu.pkr.hcl' = Join-Path $PSScriptRoot 'ubuntu.pkr.hcl'
             'Ubuntu-Setup.ps1' = Join-Path $PSScriptRoot 'Ubuntu-Setup.ps1'
             'Ubuntu-Packer.ps1' = Join-Path $PSScriptRoot 'Ubuntu-Packer.ps1'
+            'Ubuntu-Network.ps1' = Join-Path $PSScriptRoot 'Ubuntu-Network.ps1'
             'finalize-account.sh' = Join-Path $PSScriptRoot 'finalize-account.sh'
         }
         $hashes = @{}
@@ -213,12 +218,18 @@ try {
     }
     $vm = Get-UbuntuOwnedVM $record
     if ($record.Phase -eq 'Building') {
+        if (Test-Path -LiteralPath (Join-Path $record.Root 'network-policy.json')) {
+            if ($vm.State -eq 'Off') { Set-UbuntuNetworkPolicy $record }
+            else { Assert-UbuntuNetworkPolicy $record }
+        }
         if ($vm.State -in @('Off', 'Saved')) { Start-VM -VM $vm | Out-Null }
         elseif ($vm.State -ne 'Running') { throw 'VM is busy; retry after its state stabilizes.' }
         Complete-UbuntuPackerBuild -RecordPath $markerPath
         $record = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
         $vm = Get-UbuntuOwnedVM $record
     }
+    if ($vm.State -eq 'Off') { Set-UbuntuNetworkPolicy $record }
+    else { Assert-UbuntuNetworkPolicy $record }
     if ($vm.State -in @('Off', 'Saved')) { Start-VM -VM $vm | Out-Null }
     elseif ($vm.State -ne 'Running') { throw 'VM is busy; retry after its state stabilizes.' }
     if ($OpenConsole) { Start-Process -FilePath "$env:WINDIR\System32\vmconnect.exe" -ArgumentList @('localhost', $VMName) | Out-Null }
@@ -242,6 +253,6 @@ try {
     Write-Host "Ubuntu Server 26.04 ready: $VMName ($UserName@$address). Root is locked; SSH password login is disabled."
     Write-Host "SSH identity: $keyPath"
     Write-Host "Connect: ssh $VMName (saved in your user SSH config). Rerun this command to refresh a changed DHCP address."
-    Write-Host 'This installation does not apply Ansible. Internal networking is not a host-isolation policy.'
+    Write-Host 'Host-enforced IPv4 TCP/UDP internet access; host-initiated SSH and gateway DNS/DHCP only. IPv6 is blocked. Ansible is not applied.'
     [pscustomobject]@{ Name = $VMName; VMId = $record.VMId; Directory = $root; Address = $address; UserName = $UserName; IdentityFile = $keyPath; KnownHostsFile = $knownHosts }
 } finally { if ($locked) { $mutex.ReleaseMutex() }; $mutex.Dispose() }

@@ -157,6 +157,7 @@ function Complete-UbuntuPackerBuild([string]$RecordPath) {
             Start-Sleep -Seconds 2
         } while ($true)
         Set-UbuntuVMPolicy $record
+        Set-UbuntuNetworkPolicy $record
         $record.Address = $address
         $record.Phase = 'Account'
         Save-UbuntuText $RecordPath ($record | ConvertTo-Json -Depth 8)
@@ -172,7 +173,8 @@ function Invoke-UbuntuPacker([object]$Record, [string]$RecordPath, [bool]$OpenCo
     foreach ($action in @('Register-UbuntuPackerVM', 'Complete-UbuntuPackerBuild')) {
         $setupPath = (Join-Path $payload 'Ubuntu-Setup.ps1').Replace("'", "''")
         $packerPath = (Join-Path $payload 'Ubuntu-Packer.ps1').Replace("'", "''")
-        $program = '$ErrorActionPreference="Stop"; $ProgressPreference="SilentlyContinue"; Import-Module Hyper-V; . ''' + $setupPath + '''; . ''' + $packerPath + '''; ' + $action + ' -RecordPath ''' + $RecordPath.Replace("'", "''") + ''''
+        $networkPath = (Join-Path $payload 'Ubuntu-Network.ps1').Replace("'", "''")
+        $program = '$ErrorActionPreference="Stop"; $ProgressPreference="SilentlyContinue"; Import-Module Hyper-V; . ''' + $setupPath + '''; . ''' + $packerPath + '''; . ''' + $networkPath + '''; ' + $action + ' -RecordPath ''' + $RecordPath.Replace("'", "''") + ''''
         $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($program))
         $commands[$action] = '"' + "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" + '" -NoLogo -NoProfile -OutputFormat Text -EncodedCommand ' + $encoded
         if ($commands[$action].Length -gt 7500) { throw 'Choose a shorter VMRoot path for Packer host commands.' }
