@@ -6,7 +6,7 @@ The user entry point for Workstation host setup, base images and VM lifecycle.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [Parameter(Position = 0)][ValidateSet('create', 'list', 'start', 'stop', 'delete', 'image', 'host', 'terminal', 'configure', 'help')][string]$Command = 'help',
+    [Parameter(Position = 0)][ValidateSet('create', 'list', 'start', 'stop', 'delete', 'image', 'setup', 'configure', 'help')][string]$Command = 'help',
     [ValidateSet('ubuntu-26-04', 'windows-pro')][string]$OS,
     [Parameter(Position = 1)][string]$VMName,
     [string]$VMRoot,
@@ -27,8 +27,8 @@ Set-StrictMode -Version Latest
 
 if ($Command -eq 'help') {
     Write-Output @'
-wvm terminal install               Install/configure PowerShell, Terminal and Starship.
-wvm host install                   Install VS Code and configure the terminal.
+wvm setup terminal                 Install/configure PowerShell, Terminal and Starship.
+wvm setup vscode                   Detect/install VS Code, review settings and optional extensions.
 wvm create                         Select Ubuntu Server 26.04 or Windows 11 Pro.
 wvm create -OS ubuntu-26-04         Create or resume an Ubuntu VM.
 wvm create -OS windows-pro          Create or resume a Windows VM.
@@ -44,7 +44,7 @@ wvm image build -OS ubuntu-26-04   Build/reuse a versioned clean Ubuntu base.
 wvm image list                    List published base images.
 wvm help                           Show this help.
 
-Run host/terminal install in normal PowerShell; VM/image commands require administrator PowerShell.
+Run setup commands in normal PowerShell; VM/image commands require administrator PowerShell.
 Optional: -VMName -VMRoot -IsoPath -SwitchName -CPUs -MemoryGB -DiskGB
           -UserName -OpenConsole
 Windows only: -NestedVirtualization
@@ -78,20 +78,22 @@ if ($Command -in @('list','start','stop','delete','image','configure') -and $PSV
     if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell worker failed; inspect its preceding error.' }
     return
 }
-$sourceRoot = Split-Path -Parent $PSScriptRoot
-if ($Command -in @('host','terminal')) {
-    if ($VMName -cne 'install') { throw "Use wvm $Command install." }
+$windowsRoot = Split-Path -Parent $PSScriptRoot
+if ($Command -eq 'setup') {
+    if ($VMName -notin @('vscode','terminal')) { throw 'Use wvm setup vscode or wvm setup terminal.' }
     foreach ($name in $PSBoundParameters.Keys) {
-        if ($name -notin @('Command','VMName')) { throw "-$name is not supported for wvm $Command install." }
+        if ($name -notin @('Command','VMName')) { throw "-$name is not supported for wvm setup." }
     }
-    if ($WhatIfPreference) { throw 'Host setup does not support WhatIf.' }
+    if ($WhatIfPreference) { throw 'Setup does not support WhatIf.' }
     $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run host/terminal setup in a normal PowerShell window.' }
-    $windowsRoot = Split-Path -Parent $sourceRoot
-    if ($Command -eq 'host') { & (Join-Path $windowsRoot 'apps\Install-Applications.ps1') }
-    & (Join-Path $windowsRoot 'terminal\Install-Terminal.ps1')
+    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run wvm setup in a normal PowerShell window.' }
+    switch ($VMName) {
+        'vscode' { & (Join-Path $windowsRoot 'vscode\Install-VSCode.ps1') }
+        'terminal' { & (Join-Path $windowsRoot 'terminal\Install-Terminal.ps1') }
+    }
     return
 }
+$hypervRoot = Join-Path $windowsRoot 'hyperv'
 if ($Command -eq 'list') {
     foreach ($name in @('OS', 'VMName', 'VMRoot', 'IsoPath', 'SwitchName', 'CPUs', 'MemoryGB', 'DiskGB', 'UserName', 'NestedVirtualization', 'OpenConsole', 'Force', 'ImageRoot')) {
         if ($PSBoundParameters.ContainsKey($name)) { throw "-$name applies only to wvm create." }
@@ -119,10 +121,10 @@ if ($Command -eq 'configure') {
     }
     if ($WhatIfPreference) { throw 'Configure does not support WhatIf.' }
     Import-Module Hyper-V
-    . (Join-Path $sourceRoot 'shared\WVM-Lifecycle.ps1')
+    . (Join-Path $hypervRoot 'shared\WVM-Lifecycle.ps1')
     $target=Get-WVMTarget $VMName $VMRoot
     if ($target.Guest -ne 'Ubuntu' -or $target.Record.Phase -ne 'Complete') { throw 'Create a ready Ubuntu VM before configuring Workstation.' }
-    & (Join-Path $sourceRoot 'shared\New-ImageVM.ps1') -Guest Ubuntu -VMName $VMName -VMRoot (Split-Path -Parent $target.Record.Root) -ConfigureWorkstation
+    & (Join-Path $hypervRoot 'shared\New-ImageVM.ps1') -Guest Ubuntu -VMName $VMName -VMRoot (Split-Path -Parent $target.Record.Root) -ConfigureWorkstation
     return
 }
 if ($Command -eq 'image') {
@@ -133,7 +135,7 @@ if ($Command -eq 'image') {
     }
     if($VMName -eq 'list'){
         if($PSBoundParameters.ContainsKey('IsoPath') -or $OpenConsole){throw 'Image list does not use installation media or a console.'}
-        . (Join-Path $sourceRoot 'shared\BaseImage.ps1')
+        . (Join-Path $hypervRoot 'shared\BaseImage.ps1')
         Assert-PackerPath $ImageRoot
         if(-not(Test-Path -LiteralPath $ImageRoot)){Write-Output 'No base images published.';return}
         Assert-WVMImageACL $ImageRoot
@@ -153,7 +155,7 @@ if ($Command -eq 'image') {
 }
 if ($Command -in @('start','stop','delete')) {
     Import-Module Hyper-V
-    . (Join-Path $sourceRoot 'shared\WVM-Lifecycle.ps1')
+    . (Join-Path $hypervRoot 'shared\WVM-Lifecycle.ps1')
     $options = @{ VMName=$VMName }
     if ($PSBoundParameters.ContainsKey('VMRoot')) { $options.VMRoot=$VMRoot }
     foreach ($name in @('WhatIf','Confirm')) {
@@ -161,7 +163,7 @@ if ($Command -in @('start','stop','delete')) {
     }
     if ($Command -eq 'delete') {
         $options.Force = $Force
-        & (Join-Path $sourceRoot 'shared\Remove-OwnedVM.ps1') @options
+        & (Join-Path $hypervRoot 'shared\Remove-OwnedVM.ps1') @options
     } else {
         $options.Action = $Command
         if ($Command -eq 'start') { $options.OpenConsole=$OpenConsole }
@@ -186,7 +188,7 @@ if ($Command -eq 'image') {
     $family=if($OS -eq 'windows-pro'){'Windows'}else{'Ubuntu'}
     $options=@{Guest=$family;ImageRoot=$ImageRoot;OpenConsole=$OpenConsole}
     if($PSBoundParameters.ContainsKey('IsoPath')){$options.IsoPath=$IsoPath}
-    & (Join-Path $sourceRoot 'shared\Build-BaseImage.ps1') @options
+    & (Join-Path $hypervRoot 'shared\Build-BaseImage.ps1') @options
     return
 }
 if ($OS -eq 'ubuntu-26-04' -and $NestedVirtualization) {
@@ -202,4 +204,4 @@ if ($OS -eq 'windows-pro' -and $PSBoundParameters.ContainsKey('NestedVirtualizat
     $arguments.NestedVirtualization = $NestedVirtualization
 }
 $arguments.Guest = if ($OS -eq 'windows-pro') { 'Windows' } else { 'Ubuntu' }
-& (Join-Path $sourceRoot 'shared\New-ImageVM.ps1') @arguments
+& (Join-Path $hypervRoot 'shared\New-ImageVM.ps1') @arguments

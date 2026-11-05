@@ -3,10 +3,10 @@
 Install wvm once from the cloned checkout in a **normal PowerShell window**:
 
 ~~~powershell
-.\host\windows\hyperv\wvm\Install-WVM.ps1
+.\host\windows\wvm\Install-WVM.ps1
 wvm help
-wvm terminal install  # Optional terminal setup
-wvm host install      # Optional VS Code plus terminal setup
+wvm setup terminal    # Optional terminal setup
+wvm setup vscode      # Optional VS Code setup and extensions
 ~~~
 
 Use an **administrator, 64-bit PowerShell window** for VM/image operations on Windows 11 Pro x64. Installing wvm itself does not install host applications or create VMs. All user-facing operations go through wvm; the other scripts are implementation details.
@@ -16,9 +16,9 @@ Windows Pro VM creation requires Hyper-V to be enabled beforehand. The Ubuntu co
 
 | Location | Responsibility |
 | --- | --- |
-| `host/windows/apps/Install-Applications.ps1` | VS Code dependency installation, called by wvm host install |
+| `host/windows/vscode/Install-VSCode.ps1` | VS Code detection, confirmed pinned installation, defaults and optional extensions |
 | `host/windows/terminal/` | Terminal dependencies, PowerShell startup, font and appearance |
-| `host/windows/hyperv/wvm/wvm.ps1`, `Install-WVM.ps1` | Single user command and its per-user bootstrap installation |
+| `host/windows/wvm/wvm.ps1`, `Install-WVM.ps1` | Single user command and its per-user bootstrap installation |
 | `host/windows/hyperv/windows-pro/` | Windows Pro image recipe and unattended setup |
 | `host/windows/hyperv/ubuntu-26-04/` | Ubuntu creation, Packer recipe, host-enforced network policy, SSH/account finalization and recovery |
 | `host/windows/hyperv/shared/Packer.ps1` | Pinned Packer installation and build process handling |
@@ -32,7 +32,7 @@ Each VM command owns its recorded installation directory. Saved VM IDs, ownershi
 Run this once from the checkout in a **normal PowerShell window**:
 
 ```powershell
-.\host\windows\hyperv\wvm\Install-WVM.ps1
+.\host\windows\wvm\Install-WVM.ps1
 wvm help
 ```
 
@@ -167,13 +167,21 @@ The image/clone architecture still needs fresh Hyper-V end-to-end validation for
 Terminal setup is self-contained. From a **normal PowerShell 5.1 or 7 window**, run:
 
 ```powershell
-wvm terminal install
+wvm setup terminal
 ```
 
 `Install-Terminal.ps1` owns installation of **PowerShell 7, Windows Terminal and Starship** through the explicit WinGet package IDs and the `winget` source. Existing executables are reused without upgrading or reinstalling. App Installer/WinGet is needed only when a dependency is missing; the command reports how to obtain it if unavailable. The installer accepts the selected package/source agreements, and an individual package installer may request elevation. Process PATH is refreshed without changing persistent PATH. Failed installation or a still-missing executable stops before terminal configuration.
 
-After dependencies are available, `Install-Terminal.ps1` prepares the prompt, pinned Nerd Font, Slate Glass and Terminal profiles directly. `wvm host install` delegates terminal preparation to this same entry point. Running terminal installation alone does not install VS Code, Git, WSL or Hyper-V, and does not create VMs.
+After dependencies are available, `Install-Terminal.ps1` prepares the prompt, pinned Nerd Font, Slate Glass and Terminal profiles directly. The terminal setup command uses this same entry point. Running terminal installation alone does not install VS Code, Git, WSL or Hyper-V, and does not create VMs.
 
-There are two scripts under `host/windows/terminal/`: use `wvm terminal install` for installation and configuration; `PowerShell-Profile.ps1` is the runtime profile copied by the installer and loaded automatically in each new Workstation tab. The runtime loads Starship and available PSReadLine settings. Configuration uses `%LOCALAPPDATA%\Workstation\Terminal`; existing `$PROFILE` files remain untouched. Console-only PSReadLine configuration is skipped with redirected input/output. No execution-policy change is made. Existing profile GUIDs, Slate Glass and 62% opacity are preserved. Setup makes Workstation the default in stable Windows Terminal settings, preserving comments and other settings and keeping the original settings in `settings.json.workstation-backup` before the first change.
+There are two scripts under `host/windows/terminal/`: use `wvm setup terminal` for installation and configuration; `PowerShell-Profile.ps1` is the runtime profile copied by the installer and loaded automatically in each new Workstation tab. The runtime loads Starship and available PSReadLine settings. Configuration uses `%LOCALAPPDATA%\Workstation\Terminal`; existing `$PROFILE` files remain untouched. Console-only PSReadLine configuration is skipped with redirected input/output. No execution-policy change is made. Existing profile GUIDs, Slate Glass and 62% opacity are preserved. Setup makes Workstation the default in stable Windows Terminal settings, preserving comments and other settings and keeping the original settings in `settings.json.workstation-backup` before the first change.
 
 Setup records the resolved Starship executable in `%LOCALAPPDATA%\Workstation\Terminal\runtime.json`. Both PowerShell profiles initialize Starship using that absolute path, so a new Terminal tab can refresh its environment without losing the prompt. If Starship is moved or reinstalled elsewhere, rerun terminal setup to refresh the recorded path. Opening a terminal does not install applications or change persistent PATH settings.
+
+## VS Code defaults
+
+See [VS Code configuration](vscode.md) for host/remote terminal defaults, preserved user settings, browser behavior and optional extensions. `wvm setup vscode` applies the Windows VS Code defaults; terminal setup is separate.
+
+`wvm setup vscode` installs/configures only VS Code in normal PowerShell and asks whether to install the recommended extension bundle (Enter accepts Yes). See [VS Code defaults](vscode.md).
+
+The CLI lives at `host/windows/wvm/`, alongside the terminal, vscode and hyperv modules. After moving a checkout or updating from the old nested CLI location, rerun `.\host\windows\wvm\Install-WVM.ps1` in normal Windows PowerShell to refresh the managed launcher and location record. The bootstrap depends only on Windows PowerShell, not Hyper-V image/media helpers.

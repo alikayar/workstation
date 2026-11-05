@@ -11,14 +11,21 @@ if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitProcess) { throw 'Ru
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Install wvm in a normal PowerShell window as your desktop user.' }
 
-$sourceRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $sourceRoot 'windows-pro\Windows-Media.ps1')
+$windowsRoot = Split-Path -Parent $PSScriptRoot
+if ($windowsRoot -notmatch '^[a-zA-Z]:[\\/]') { throw 'Install wvm from a checkout on a local Windows drive.' }
+function Assert-WVMInstallPath([string]$Path) {
+    $cursor = $Path
+    while ($cursor) {
+        if ((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw "Linked path refused: $cursor" }
+        $cursor = [IO.Path]::GetDirectoryName($cursor)
+    }
+}
 $entry = Join-Path $PSScriptRoot 'wvm.ps1'
 $directory = Join-Path $env:LOCALAPPDATA 'Workstation\bin'
 $launcher = Join-Path $directory 'wvm.cmd'
 $installedEntry = Join-Path $directory 'wvm.ps1'
 $locationPath = Join-Path $directory 'wvm-location.json'
-foreach ($path in @($entry, $directory, $launcher, $installedEntry, $locationPath)) { Assert-PlainPath $path }
+foreach ($path in @($entry, $directory, $launcher, $installedEntry, $locationPath)) { Assert-WVMInstallPath $path }
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw 'The wvm entry point is missing from this checkout.' }
 $marker = 'rem Workstation managed wvm launcher v1'
 if (Test-Path -LiteralPath $launcher) {
@@ -43,6 +50,7 @@ $content = @(
 ) -join "`r`n"
 New-Item -ItemType Directory -Path $directory -Force | Out-Null
 function Save-WVMFile([string]$Path, [string]$Content, [Text.Encoding]$Encoding = (New-Object Text.UTF8Encoding($true))) {
+    if ((Test-Path -LiteralPath $Path) -and [IO.File]::ReadAllText($Path) -ceq $Content) { return }
     $temporary = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
     try {
         [IO.File]::WriteAllText($temporary, $Content, $Encoding)
@@ -65,7 +73,7 @@ if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw 'Checkout entry
 exit $LASTEXITCODE
 '@
 # Keep Unicode checkout paths out of CMD; PowerShell reads them from the UTF-8 record.
-$location = @{ Schema = 1; ManagedBy = 'Workstation wvm'; SourceRoot = $sourceRoot }
+$location = [ordered]@{ Schema = 1; ManagedBy = 'Workstation wvm'; SourceRoot = $windowsRoot }
 Save-WVMFile $locationPath ($location | ConvertTo-Json)
 Save-WVMFile $installedEntry $entryText
 # The launcher is ASCII so CMD does not need a code-page change.

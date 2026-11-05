@@ -1,0 +1,23 @@
+{
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.profiles.windows": {
+    "PowerShell": {
+      "source": "PowerShell",
+      "icon": "terminal-powershell"
+    }
+  },
+  "terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font', Consolas, monospace",
+  "terminal.integrated.shellIntegration.enabled": true,
+  "terminal.integrated.scrollback": 1000,
+  "terminal.integrated.persistentSessionReviveProcess": "never",
+  "workbench.browser.enableRemoteProxy": true,
+  "workbench.browser.dataStorage": "workspace",
+  "extensions.ignoreRecommendations": true,
+  "chat.disableAIFeatures": true,
+  "telemetry.telemetryLevel": "off",
+  "redhat.telemetry.enabled": false,
+  "vsicons.dontShowNewVersionMessage": true,
+  "workbench.editorAssociations": {
+    "*.md": "default"
+  }
+}

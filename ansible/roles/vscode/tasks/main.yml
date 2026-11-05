@@ -1,0 +1,14 @@
+---
+- name: Add missing VS Code remote settings
+  become: false
+  # Both sources are available in this local playbook, including temporary bootstrap bundles.
+  ansible.builtin.command:
+    argv: >-
+      {{ ['/usr/bin/python3', role_path ~ '/files/merge-settings.py',
+          workstation_home ~ '/.vscode-server/data/Machine/settings.json',
+          (playbook_dir | dirname) ~ '/dotfiles/vscode/remote-settings.json']
+         + (['--check'] if ansible_check_mode else []) }}
+  # The helper implements a read-only --check; no runtime helper copies are installed.
+  check_mode: false
+  register: vscode_settings_result
+  changed_when: vscode_settings_result.stdout == 'changed'
