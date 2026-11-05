@@ -7,6 +7,7 @@ Install wvm once from the cloned checkout in a **normal PowerShell window**:
 wvm help
 wvm setup terminal    # Optional terminal setup
 wvm setup vscode      # Optional VS Code setup and extensions
+wvm setup codex       # Optional Windows Codex defaults and instructions
 ~~~
 
 Use an **administrator, 64-bit PowerShell window** for VM/image operations on Windows 11 Pro x64. Installing wvm itself does not install host applications or create VMs. All user-facing operations go through wvm; the other scripts are implementation details.
@@ -17,6 +18,7 @@ Windows Pro VM creation requires Hyper-V to be enabled beforehand. The Ubuntu co
 | Location | Responsibility |
 | --- | --- |
 | `host/windows/vscode/Install-VSCode.ps1` | VS Code detection, confirmed pinned installation, defaults and optional extensions |
+| `host/windows/codex/` | Windows Codex defaults and managed instructions |
 | `host/windows/terminal/` | Terminal dependencies, PowerShell startup, font and appearance |
 | `host/windows/wvm/wvm.ps1`, `Install-WVM.ps1` | Single user command and its per-user bootstrap installation |
 | `host/windows/hyperv/windows-pro/` | Windows Pro image recipe and unattended setup |
@@ -78,6 +80,23 @@ Delete accepts any exact registered Hyper-V VM name, regardless of installer or 
 For Workstation VMs, optional metadata with matching live VM ID/name/token identifies setup files, keys and the installation directory; its schema/backend are not used as eligibility criteria. Without metadata, cleanup removes the disks and VM-specific configuration/state files identified from Hyper-V, then empty directories. It does not guess ownership of unrelated files in a shared directory. Shared installation ISOs and tool caches are retained. A matching Ubuntu SSH-config block is removed for its owning user.
 
 An administrator-only journal under %ProgramData%\Workstation\Deletions stores the exact file plan before unregistering. Rerunning the same delete command completes interrupted cleanup even after VM registration disappears. A new VM reusing the name is refused. A VM that was already unregistered before any deletion plan was captured is not guessed from stray files. No VM name has a special exemption.
+
+## Codex host setup
+
+Run `wvm setup codex` in a normal PowerShell window after installing/opening the Codex desktop app and making its native `codex.exe` CLI available on PATH. This command configures the existing Codex installation; it does not download Codex, sign in, enable Windows features or provision the VM.
+
+The installer proposes `sandbox_mode = "workspace-write"`, `approval_policy = "on-request"`, `features.prefer_mxc = true` and `windows.sandbox = "elevated"`. MXC is preferred when the device and policy support it; elevated is the documented legacy fallback, whose commands run without administrator privileges. Existing model choices, MCP servers, plugins and unrelated settings remain unchanged. Selected profiles and organization policy can override these user defaults. See the [official Windows sandbox guide](https://learn.chatgpt.com/docs/windows/windows-sandbox).
+
+Configuration is read and edited through the installed CLI's [official config API](https://learn.chatgpt.com/docs/app-server), over private standard input/output. There is no listening network port or agent conversation. Edits target only the base user `config.toml` in `CODEX_HOME` (default `%USERPROFILE%\.codex`); version checks reject concurrent edits. Invalid configuration or an unsupported API stops setup rather than rewriting TOML with a partial parser.
+
+Missing settings are added, matching settings are left alone, and differing values show current/proposed values and ask `Override ...? [y/N]`. Enter preserves the current value. Windows instructions come from `host/windows/codex/Instructions.md` and are maintained in a marked block in the user's `AGENTS.md`; existing text outside that block is preserved, and updating a nonempty file requires confirmation. Changed files are backed up under their sibling `workstation-backups` directory. Setup refuses linked paths and concurrent setup for the same Codex home.
+
+Skills are managed separately. Codex setup has no Git dependency, does not fetch an external skill repository and leaves existing skills unchanged.
+
+Open a new chat after setup. Host Codex and remote Codex use their own configuration: for development in Ubuntu, select the VM repository as an SSH project in Codex. Sending an SSH command from a host chat does not move that chat's skills or execution boundary into Ubuntu. This setup never imports VM credentials, private keys, authentication files, chat history, Linux-only tool commands or skills.
+
+For Workstation-created Ubuntu VMs, create/resume already publishes the host SSH alias after account setup. Codex setup leaves SSH keys, aliases, VM state and app connection records unchanged. In Codex, open **Settings > Connections**, enable the existing SSH alias and select the remote repository folder. Codex discovers concrete aliases from the host user's SSH config; remote Codex installation and sign-in remain prerequisites. For an existing VM outside this workflow, prepare its SSH alias using the [host connection guide](host.md#add-a-host-side-ssh-alias). See the [official remote connection guide](https://learn.chatgpt.com/docs/remote-connections#connect-to-an-ssh-host).
+
 ## Packer-first base images
 
 Packer builds a generalized **base image once per recipe fingerprint**. VM creation copies that disk into an independent writable VHDX, creates a new Hyper-V VM and applies instance-specific configuration. It does not run the ISO installer again when a matching verified image exists.

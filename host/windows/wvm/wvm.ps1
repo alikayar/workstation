@@ -29,6 +29,7 @@ if ($Command -eq 'help') {
     Write-Output @'
 wvm setup terminal                 Install/configure PowerShell, Terminal and Starship.
 wvm setup vscode                   Detect/install VS Code, review settings and optional extensions.
+wvm setup codex                    Apply Windows Codex defaults and managed instructions.
 wvm create                         Select Ubuntu Server 26.04 or Windows 11 Pro.
 wvm create -OS ubuntu-26-04         Create or resume an Ubuntu VM.
 wvm create -OS windows-pro          Create or resume a Windows VM.
@@ -80,7 +81,7 @@ if ($Command -in @('list','start','stop','delete','image','configure') -and $PSV
 }
 $windowsRoot = Split-Path -Parent $PSScriptRoot
 if ($Command -eq 'setup') {
-    if ($VMName -notin @('vscode','terminal')) { throw 'Use wvm setup vscode or wvm setup terminal.' }
+    if ($VMName -notin @('vscode','terminal','codex')) { throw 'Use wvm setup vscode, wvm setup terminal or wvm setup codex.' }
     foreach ($name in $PSBoundParameters.Keys) {
         if ($name -notin @('Command','VMName')) { throw "-$name is not supported for wvm setup." }
     }
@@ -90,6 +91,7 @@ if ($Command -eq 'setup') {
     switch ($VMName) {
         'vscode' { & (Join-Path $windowsRoot 'vscode\Install-VSCode.ps1') }
         'terminal' { & (Join-Path $windowsRoot 'terminal\Install-Terminal.ps1') }
+        'codex' { & (Join-Path $windowsRoot 'codex\Setup-Codex.ps1') }
     }
     return
 }
