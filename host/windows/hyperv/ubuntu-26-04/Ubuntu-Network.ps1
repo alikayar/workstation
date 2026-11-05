@@ -65,11 +65,6 @@ function Get-UbuntuNetworkRules([object]$Topology) {
         $rules.Add(@{ Direction = 'Outbound'; Action = 'Allow'; RemoteIPAddress = '0.0.0.0/0'; Protocol = $protocol; Weight = 10000 - [int]($protocol -eq 'UDP'); Stateful = $true; IdleSessionTimeout = 3600 })
     }
     # No IPv6 or non-TCP/UDP allow: tunnels and link-local IPv6 must not bypass IPv4 restrictions.
-    foreach ($rule in $rules) {
-        foreach ($entry in @{ LocalIPAddress = 'ANY'; Protocol = 'ANY'; LocalPort = 'ANY'; RemotePort = 'ANY'; Stateful = $false; IdleSessionTimeout = 255; IsolationID = 0 }.GetEnumerator()) {
-            if (-not $rule.ContainsKey($entry.Key)) { $rule[$entry.Key] = $entry.Value }
-        }
-    }
     return $rules.ToArray()
 }
 
@@ -78,6 +73,9 @@ function Get-UbuntuNetworkRuleKey([object]$Rule, [switch]$Mac) {
         $remote = [string]$Rule.RemoteMacAddress
         return (([string]$Rule.Direction).ToLowerInvariant(), ([string]$Rule.Action).ToLowerInvariant(), ($remote -replace '[:-]', '').ToUpperInvariant()) -join '|'
     }
+    $isStateful = $false
+    if ($Rule -is [Collections.IDictionary]) { if ($Rule.Contains('Stateful')) { $isStateful = [bool]$Rule['Stateful'] } }
+    elseif ($Rule.PSObject.Properties['Stateful']) { $isStateful = [bool]$Rule.Stateful }
     $values = foreach ($name in @('Direction', 'Action', 'RemoteIPAddress', 'LocalIPAddress', 'Protocol', 'LocalPort', 'RemotePort', 'Weight', 'Stateful', 'IdleSessionTimeout', 'IsolationID')) {
         $value = $null
         if ($Rule -is [Collections.IDictionary]) { if ($Rule.Contains($name)) { $value = $Rule[$name] } }
@@ -85,6 +83,7 @@ function Get-UbuntuNetworkRuleKey([object]$Rule, [switch]$Mac) {
         if ($name -in @('RemoteIPAddress', 'LocalIPAddress')) { $value = ConvertTo-UbuntuIPv4Prefix ([string]$value) }
         elseif ($name -in @('Protocol', 'LocalPort', 'RemotePort') -and (-not $value -or $value -eq 'ANY')) { $value = 'ANY' }
         elseif ($name -eq 'Stateful') { $value = [bool]$value }
+        elseif ($name -eq 'IdleSessionTimeout' -and -not $isStateful) { $value = 0 }
         elseif ($name -eq 'IdleSessionTimeout' -and $null -eq $value) { $value = 255 }
         elseif ($name -eq 'IsolationID' -and $null -eq $value) { $value = 0 }
         if ($name -eq 'Protocol' -and $value -eq '6') { $value = 'TCP' }
@@ -132,14 +131,9 @@ function Set-UbuntuNetworkPolicy([object]$Record) {
         Assert-UbuntuNetworkRules $actual @($prior.Extended) @($prior.Mac)
     } elseif ($actual.Extended.Count -or $actual.Mac.Count) { throw 'Unmanaged network ACLs found; existing rules retained.' }
     $extended = @(Get-UbuntuNetworkRules $topology)
-    $gatewayMac = $topology.GatewayMac -replace '(..)(?=.)', '$1-'
-    $mac = @(
-        @{ Direction = 'Inbound'; Action = 'Deny'; RemoteMacAddress = 'ANY' },
-        @{ Direction = 'Outbound'; Action = 'Deny'; RemoteMacAddress = 'ANY' },
-        @{ Direction = 'Inbound'; Action = 'Allow'; RemoteMacAddress = $gatewayMac },
-        @{ Direction = 'Outbound'; Action = 'Allow'; RemoteMacAddress = $gatewayMac },
-        @{ Direction = 'Outbound'; Action = 'Allow'; RemoteMacAddress = 'FF-FF-FF-FF-FF-FF' }
-    )
+    # Default Switch boot networking fails with wildcard MAC ACLs in live tests.
+    # IP/state rules enforce connection isolation; retain old MAC entries only for owned-rule migration.
+    $mac = @()
     if ($prior -and $prior.Phase -ceq 'Applied' -and ($prior.Topology | ConvertTo-Json -Depth 6 -Compress) -ceq ($topology | ConvertTo-Json -Depth 6 -Compress)) {
         $matches = $true
         try { Assert-UbuntuNetworkRules $actual $extended $mac -Exact } catch { $matches = $false }
@@ -156,7 +150,10 @@ function Set-UbuntuNetworkPolicy([object]$Record) {
     foreach ($rule in $actual.Extended) { Remove-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $adapter -Direction $rule.Direction -Weight $rule.Weight -Confirm:$false }
     foreach ($rule in $actual.Mac) { Remove-VMNetworkAdapterAcl -VMNetworkAdapter $adapter -Direction $rule.Direction -Action $rule.Action -RemoteMacAddress $rule.RemoteMacAddress -Confirm:$false }
     foreach ($rule in $mac) { Add-VMNetworkAdapterAcl -VMNetworkAdapter $adapter @rule }
-    foreach ($rule in $extended) { Add-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $adapter @rule }
+    foreach ($rule in $extended) {
+        try { Add-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $adapter @rule }
+        catch { throw ('Hyper-V rejected network rule ' + (Get-UbuntuNetworkRuleKey $rule) + ': ' + $_.Exception.Message) }
+    }
     Assert-UbuntuNetworkRules (Get-UbuntuAdapterRules $adapter) $extended $mac -Exact
     $vm = Get-UbuntuOwnedVM $Record
     if ($vm.State -ne 'Off' -or -not (Test-UbuntuAdapterGuards (@(Get-VMNetworkAdapter -VM $vm)[0]))) { throw 'VM state or network guards changed during policy installation; no successful policy was recorded.' }
