@@ -104,7 +104,10 @@
 
 - name: Explain privileged Docker access
   ansible.builtin.debug:
-    msg: Docker is installed without root-equivalent docker group membership. Use sudo docker; unattended Docker-based agent tools require a separately approved access design.
+    msg: >-
+      Docker is installed without root-equivalent docker group membership.
+      Use sudo docker; unattended Docker-based agent tools require a
+      separately approved access design.
   when: not (docker_add_user_to_group | bool)
 
 - name: Enable and start Docker
