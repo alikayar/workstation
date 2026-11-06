@@ -12,7 +12,7 @@ Workstation provides executables, version defaults and launchers. Shared skills 
 
 ## Document conversion
 
-Enable MarkItDown with `workstation_markitdown_enabled: true` in the ignored local host variables and apply the `agent_tools` role. The existing mise/uv/Python setup must be installed first.
+Enable MarkItDown with `agent_tools_markitdown_enabled: true` in the ignored local host variables and apply the `agent_tools` role. The existing mise/uv/Python setup must be installed first.
 
 Use `workstation-markitdown input.pdf -o output.md`. The launcher points to an isolated uv tool environment under `~/.local/share/workstation/markitdown-0.1.9/`, with only the PDF, DOCX, PPTX and XLSX extras requested. It does not enable third-party converter plugins or configure hosted AI services. Text extraction does not prove layout, OCR or complex table fidelity.
 
@@ -22,7 +22,7 @@ Disabling the setting skips future installation; it does not uninstall an existi
 
 The Ubuntu `agent_tools` role installs **agent-browser 0.41.2** and **Chrome for Testing 157.0.8103.38** by default on x86_64. Both downloads are versioned and SHA256 checked. Version directories under `/opt/workstation` are root-owned. Chrome's completed extraction is recorded only after unpacking; an interrupted extraction is retried. Old versions, artifacts and the verified archive cache are retained.
 
-Chrome for Testing does not provide a Linux ARM64 download. `workstation_agent_browser_enabled` therefore defaults to false on ARM64; explicitly enabling it there stops with an explanation. Other roles retain their ARM64 support. Setting this variable to false skips future installation; it does not uninstall an existing browser.
+Chrome for Testing does not provide a Linux ARM64 download. `agent_tools_browser_enabled` therefore defaults to false on ARM64; explicitly enabling it there stops with an explanation. Other roles retain their ARM64 support. Setting this variable to false skips future installation; it does not uninstall an existing browser.
 
 Full workstation provisioning includes this setup. To apply it separately, run inside Ubuntu from the repository root:
 

@@ -1,7 +1,7 @@
 ---
 - name: Configure task-scoped browser automation
   ansible.builtin.import_tasks: agent-browser.yml
-  when: workstation_agent_browser_enabled | bool
+  when: agent_tools_browser_enabled | bool
   tags: [agent_browser]
 
 - name: Ensure document converter directories exist
@@ -13,7 +13,7 @@
   loop:
     - {path: "{{ workstation_home }}/.local/share/workstation", mode: '0700'}
     - {path: "{{ workstation_home }}/.local/bin", mode: '0755'}
-  when: workstation_markitdown_enabled | bool
+  when: agent_tools_markitdown_enabled | bool
 
 - name: Install the reviewed document converter in its own uv environment
   become: false
@@ -28,13 +28,13 @@
       - --python
       - python3
       - --no-python-downloads
-      - "markitdown[pdf,docx,pptx,xlsx]=={{ workstation_markitdown_version }}"
+      - "markitdown[pdf,docx,pptx,xlsx]=={{ agent_tools_markitdown_version }}"
     chdir: "{{ workstation_home }}"
-    creates: "{{ workstation_markitdown_dir }}/bin/markitdown"
+    creates: "{{ agent_tools_markitdown_dir }}/bin/markitdown"
   environment:
-    UV_TOOL_DIR: "{{ workstation_markitdown_dir }}/tools"
-    UV_TOOL_BIN_DIR: "{{ workstation_markitdown_dir }}/bin"
-  when: workstation_markitdown_enabled | bool
+    UV_TOOL_DIR: "{{ agent_tools_markitdown_dir }}/tools"
+    UV_TOOL_BIN_DIR: "{{ agent_tools_markitdown_dir }}/bin"
+  when: agent_tools_markitdown_enabled | bool
 
 - name: Install the optional document converter launcher
   become: false
@@ -42,4 +42,4 @@
     src: markitdown.sh.j2
     dest: "{{ workstation_home }}/.local/bin/workstation-markitdown"
     mode: '0755'
-  when: workstation_markitdown_enabled | bool
+  when: agent_tools_markitdown_enabled | bool

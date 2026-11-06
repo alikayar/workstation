@@ -7,7 +7,7 @@ import sys
 
 
 def main():
-    binary = {{ (workstation_agent_browser_install_dir ~ '/agent-browser') | to_json }}
+    binary = {{ (agent_tools_browser_install_dir ~ '/agent-browser') | to_json }}
     args = sys.argv[1:]
     if args in (["--help"], ["--version"]):
         if args == ["--help"]:
@@ -48,9 +48,9 @@ def main():
         environment["AGENT_BROWSER_SCREENSHOT_DIR"] = os.environ["AGENT_BROWSER_SCREENSHOT_DIR"]
     command = [
         binary, "--session", session,
-        "--config", {{ (workstation_agent_browser_install_dir ~ '/config.json') | to_json }},
-        "--executable-path", {{ (workstation_agent_browser_chrome_dir ~ '/chrome-linux64/chrome') | to_json }},
-        "--idle-timeout", {{ workstation_agent_browser_idle_timeout | to_json }},
+        "--config", {{ (agent_tools_browser_install_dir ~ '/config.json') | to_json }},
+        "--executable-path", {{ (agent_tools_browser_chrome_dir ~ '/chrome-linux64/chrome') | to_json }},
+        "--idle-timeout", {{ agent_tools_browser_idle_timeout | to_json }},
         *args,
     ]
     os.execve(binary, command, environment)

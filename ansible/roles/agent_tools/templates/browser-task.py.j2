@@ -20,7 +20,7 @@ def main():
         print("Usage: workstation-browser-task COMMAND [ARG ...]", file=sys.stderr)
         return 2
     os.umask(0o077)
-    output = Path(tempfile.mkdtemp(prefix="task-", dir={{ workstation_agent_browser_output_dir | to_json }}))
+    output = Path(tempfile.mkdtemp(prefix="task-", dir={{ agent_tools_browser_output_dir | to_json }}))
     environment = {key: value for key, value in os.environ.items() if not key.startswith("AGENT_BROWSER_")}
     environment["AGENT_BROWSER_SESSION"] = output.name
     environment["AGENT_BROWSER_SCREENSHOT_DIR"] = str(output)

@@ -1,20 +1,20 @@
 ---
 # Document conversion is optional.
-workstation_markitdown_enabled: false
-workstation_markitdown_version: '0.1.9'
-workstation_markitdown_dir: "{{ workstation_home }}/.local/share/workstation/markitdown-{{ workstation_markitdown_version }}"
+agent_tools_markitdown_enabled: false
+agent_tools_markitdown_version: '0.1.9'
+agent_tools_markitdown_dir: "{{ workstation_home }}/.local/share/workstation/markitdown-{{ agent_tools_markitdown_version }}"
 
 # Chrome for Testing has no Linux ARM64 asset; other roles still support ARM64.
-workstation_agent_browser_enabled: "{{ ansible_facts['architecture'] == 'x86_64' }}"
-workstation_agent_browser_version: '0.41.2'
-workstation_agent_browser_sha256: 'c4351f3802ffa5254d8c69f20a52e2fcf56925c6016fcf4203db25a07d811379'
-workstation_agent_browser_install_dir: "/opt/workstation/agent-browser/{{ workstation_agent_browser_version }}"
-workstation_agent_browser_chrome_version: '157.0.8103.38'
-workstation_agent_browser_chrome_sha256: '8cdeb344e9b2cefe59f4aea8d1d93d5d93054c03cde217665c16fc1f62e72a66'
-workstation_agent_browser_chrome_dir: "/opt/workstation/chrome-for-testing/{{ workstation_agent_browser_chrome_version }}"
-workstation_agent_browser_output_dir: "{{ workstation_home }}/.local/share/workstation/browser-tasks"
-workstation_agent_browser_idle_timeout: '5m'
-workstation_agent_browser_packages:
+agent_tools_browser_enabled: "{{ ansible_facts['architecture'] == 'x86_64' }}"
+agent_tools_browser_version: '0.41.2'
+agent_tools_browser_sha256: 'c4351f3802ffa5254d8c69f20a52e2fcf56925c6016fcf4203db25a07d811379'
+agent_tools_browser_install_dir: "/opt/workstation/agent-browser/{{ agent_tools_browser_version }}"
+agent_tools_browser_chrome_version: '157.0.8103.38'
+agent_tools_browser_chrome_sha256: '8cdeb344e9b2cefe59f4aea8d1d93d5d93054c03cde217665c16fc1f62e72a66'
+agent_tools_browser_chrome_dir: "/opt/workstation/chrome-for-testing/{{ agent_tools_browser_chrome_version }}"
+agent_tools_browser_output_dir: "{{ workstation_home }}/.local/share/workstation/browser-tasks"
+agent_tools_browser_idle_timeout: '5m'
+agent_tools_browser_packages:
   - ca-certificates
   - unzip
   - apparmor

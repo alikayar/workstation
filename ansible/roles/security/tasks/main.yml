@@ -128,8 +128,8 @@
     argv: [/usr/sbin/ufw, allow, 22/tcp, comment, workstation-ssh]
   environment:
     LC_ALL: C
-  register: workstation_ufw_ssh
-  changed_when: "'Skipping' not in workstation_ufw_ssh.stdout"
+  register: security_ufw_ssh
+  changed_when: "'Skipping' not in security_ufw_ssh.stdout"
   when: not ansible_check_mode
 
 - name: Inspect firewall activation
@@ -138,7 +138,7 @@
     argv: [/usr/sbin/ufw, status]
   environment:
     LC_ALL: C
-  register: workstation_ufw_status
+  register: security_ufw_status
   changed_when: false
   when: not ansible_check_mode
 
@@ -149,7 +149,7 @@
   changed_when: true
   when:
     - not ansible_check_mode
-    - "'Status: active' not in workstation_ufw_status.stdout"
+    - "'Status: active' not in security_ufw_status.stdout"
 
 - name: Apply SSH and firewall handlers before verification
   ansible.builtin.meta: flush_handlers
@@ -158,16 +158,16 @@
   become: true
   ansible.builtin.command:
     argv: [/usr/sbin/sshd, -T]
-  register: workstation_sshd_policy
+  register: security_sshd_policy
   changed_when: false
   when: not ansible_check_mode
 
 - name: Verify effective SSH policy rather than only the snippet
   ansible.builtin.assert:
     that:
-      - "'permitrootlogin no' in workstation_sshd_policy.stdout_lines"
-      - "'passwordauthentication no' in workstation_sshd_policy.stdout_lines"
-      - "'kbdinteractiveauthentication no' in workstation_sshd_policy.stdout_lines"
-      - "'pubkeyauthentication yes' in workstation_sshd_policy.stdout_lines"
-      - "('allowusers ' ~ workstation_user) in workstation_sshd_policy.stdout_lines"
+      - "'permitrootlogin no' in security_sshd_policy.stdout_lines"
+      - "'passwordauthentication no' in security_sshd_policy.stdout_lines"
+      - "'kbdinteractiveauthentication no' in security_sshd_policy.stdout_lines"
+      - "'pubkeyauthentication yes' in security_sshd_policy.stdout_lines"
+      - "('allowusers ' ~ workstation_user) in security_sshd_policy.stdout_lines"
   when: not ansible_check_mode
