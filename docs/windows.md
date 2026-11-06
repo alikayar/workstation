@@ -20,7 +20,7 @@ Windows Pro VM creation requires Hyper-V to be enabled beforehand. The Ubuntu co
 | `host/windows/vscode/Install-VSCode.ps1` | VS Code detection, confirmed pinned installation, defaults and optional extensions |
 | `host/windows/codex/` | Windows Codex defaults and managed instructions |
 | `host/windows/terminal/` | Terminal dependencies, PowerShell startup, font and appearance |
-| `host/windows/wvm/wvm.ps1`, `Install-WVM.ps1` | Single user command and its per-user bootstrap installation |
+| `host/windows/wvm/` | User command, per-user bootstrap installation and read-only doctor diagnostics |
 | `host/windows/hyperv/windows-pro/` | Windows Pro image recipe and unattended setup |
 | `host/windows/hyperv/ubuntu-26-04/` | Ubuntu creation, Packer recipe, host-enforced network policy, SSH/account finalization and recovery |
 | `host/windows/hyperv/shared/Packer.ps1` | Pinned Packer installation and build process handling |
@@ -59,6 +59,27 @@ wvm list
 `wvm list` reads all local Hyper-V VMs, including those created outside Workstation, and displays name, state, CPU count, assigned/startup memory and uptime. It never starts, stops or changes a VM. The account needs Hyper-V inventory access; use an administrator PowerShell window if access is denied. Create-only flags are refused for list.
 
 Only explicitly supplied settings are forwarded. Each OS keeps its own VM name, storage root, disk-size default and validation. `-NestedVirtualization` is supported only with Windows Pro. Passwords are never CLI arguments. Help works without administrator rights; create does not elevate automatically.
+
+### Read-only host diagnostics
+
+```powershell
+wvm doctor
+wvm doctor -Detailed
+& .\host\windows\wvm\wvm.ps1 doctor -Detailed -AsObject
+wvm doctor -VMRoot 'D:\VMs' -ImageRoot 'D:\WorkstationImages'
+```
+
+Doctor does not require elevation to start. It reports unavailable providers, access-denied metadata and missing counters as **UNKNOWN**; rerunning from an administrator window can improve coverage. It never elevates, enables features, starts/stops VMs or services, mounts disks, runs guest commands, rewrites settings, installs tools or deletes anything. `-AsObject` returns the report for further processing when calling the checkout `wvm.ps1` directly, as above. The installed native/CMD launcher formats the result as text and does not preserve PowerShell objects across its default-text process boundary. No report file is written. VM/create/setup options are rejected.
+
+The quick report includes Windows RAM availability and a conservative new-VM sizing hint, logical CPU count, VM vCPU/CPU and assigned/startup/demand/dynamic memory, integration status, fixed-drive free space, VHDX file/virtual sizes and parent/checkpoint references, adapter switches/IPs, managed VM identity and recovery records. RAM headroom reserves the larger of 2 GiB or 10% of visible host RAM; this is a heuristic, not an admission guarantee. Running guests may not expose memory demand/status, and host metrics cannot identify a guest application's RAM consumption. Hyper-V CPU percentages and Windows host-OS load are different measures and are not added together.
+
+Detailed mode takes three performance readings separated by five seconds. Disk latency is calculated from raw counters, not integer-rounded formatted seconds or localized counter names; an idle disk has unknown latency rather than a fabricated zero. CPU/latency readings are short workload samples, not proof of a bottleneck. Extra CIM, filesystem and network calls can extend total runtime beyond ten seconds. CPU, VM and disk providers are sampled independently: an unavailable provider does not discard the other measurements. Missing memory, CPU or volume counters are unavailable rather than zero.
+
+For identity-matching, completed Ubuntu VMs, doctor compares the saved policy identity, current Default Switch topology, live ACLs and adapter guards against the current policy recipe. It compares the owning user's managed SSH alias with the saved address without evaluating SSH config directives. Detailed mode probes only TCP/22 at the saved IPv4 address when that same address is currently reported by the running VM (one second per probe, five seconds combined wait budget). It does not scan subnets, read keys, authenticate, run SSH, verify server identity or test guest-to-host/LAN/internet traffic. Policy and SSH checks report independently, so a policy mismatch does not hide the address/SSH findings. Matching policy configuration is not a security attestation.
+
+Record discovery covers the default WindowsVMs/UbuntuVMs stores, the image store's `.builds`, optional `-VMRoot`, and records found above registered VM configuration paths. Custom/offline stores outside these locations are not discovered automatically. Store/image metadata inspection is capped at 200 directories per store/family. Only known diagnostic JSON filenames are read; installation secrets and Packer variable files are excluded. Linked paths are refused.
+
+Detailed cache sizing inspects the selected image store and the default Workstation Media/Tools directories, deduplicating overlapping roots. It streams directory entries under a shared 20,000-entry/five-second traversal budget, skips reparse points and marks partial/error-limited totals explicitly. Sizes are logical file lengths, not guaranteed reclaimable physical space. The review list includes checkpoint chains, records without a registered VM, partial downloads, unpublished images and reusable ISOs/base images. Registered disk chains and mounted media references are checked across all readable VMs/checkpoints. **No registered reference observed** does not establish safe deletion: active/recoverable installations, partial clones, future reuse, unregistered workloads and external backups can still need those files. No cleanup command is invoked.
 
 ### Start, stop and delete by VM name
 

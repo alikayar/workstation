@@ -6,7 +6,7 @@ The user entry point for Workstation host setup, base images and VM lifecycle.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [Parameter(Position = 0)][ValidateSet('create', 'list', 'start', 'stop', 'delete', 'image', 'setup', 'configure', 'help')][string]$Command = 'help',
+    [Parameter(Position = 0)][ValidateSet('create', 'list', 'start', 'stop', 'delete', 'image', 'setup', 'configure', 'doctor', 'help')][string]$Command = 'help',
     [ValidateSet('ubuntu-26-04', 'windows-pro')][string]$OS,
     [Parameter(Position = 1)][string]$VMName,
     [string]$VMRoot,
@@ -20,7 +20,9 @@ param(
     [switch]$NestedVirtualization,
     [switch]$OpenConsole,
     [switch]$ConfigureWorkstation,
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Detailed,
+    [switch]$AsObject
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -35,6 +37,9 @@ wvm create -OS ubuntu-26-04         Create or resume an Ubuntu VM.
 wvm create -OS windows-pro          Create or resume a Windows VM.
 wvm configure NAME                 Apply/retry Workstation Ansible inside Ubuntu.
 wvm list                           List all local Hyper-V VMs without changing them.
+wvm doctor                         Read-only host/VM health and capacity report.
+wvm doctor -Detailed               Also sample performance, probe TCP/22 and size caches.
+wvm doctor -AsObject               Object output; call the checkout wvm.ps1 directly for pipelines.
 wvm start NAME                     Start the exact named VM; optionally -OpenConsole.
 wvm stop NAME                      Shut down the exact named VM normally.
 wvm delete NAME                    Delete the named VM and its exclusive disks/files (asks).
@@ -46,6 +51,9 @@ wvm image list                    List published base images.
 wvm help                           Show this help.
 
 Run setup commands in normal PowerShell; VM/image commands require administrator PowerShell.
+Doctor can run unelevated; inaccessible checks are UNKNOWN, never silently healthy.
+Doctor options: -Detailed -AsObject -VMRoot -ImageRoot. No repairs or deletion.
+The installed native launcher formats objects as text; -AsObject pipelines need the checkout .ps1.
 Optional: -VMName -VMRoot -IsoPath -SwitchName -CPUs -MemoryGB -DiskGB
           -UserName -OpenConsole
 Windows only: -NestedVirtualization
@@ -57,6 +65,12 @@ Passwords are requested by the selected installer, never command-line arguments.
 if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitProcess -or $env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
     throw 'Run wvm in 64-bit PowerShell on Windows 11 x64.'
 }
+if ($Command -ne 'doctor' -and ($PSBoundParameters.ContainsKey('Detailed') -or $PSBoundParameters.ContainsKey('AsObject'))) { throw '-Detailed and -AsObject apply only to doctor.' }
+if ($Command -eq 'doctor') {
+    foreach ($name in $PSBoundParameters.Keys) {
+        if ($name -notin @('Command','Detailed','AsObject','VMRoot','ImageRoot')) { throw "-$name is not supported for doctor; this command is read-only." }
+    }
+}
 if ($Command -ne 'create' -and $PSBoundParameters.ContainsKey('ConfigureWorkstation')) { throw '-ConfigureWorkstation applies only to create.' }
 if ($Command -eq 'create' -and ($WhatIfPreference -or $PSBoundParameters.ContainsKey('WhatIf') -or $PSBoundParameters.ContainsKey('Force'))) { throw '-WhatIf and -Force are not supported for create.' }
 if ($Command -in @('start','stop','delete')) {
@@ -67,7 +81,7 @@ if ($Command -in @('start','stop','delete')) {
     if ($Command -ne 'start' -and $OpenConsole) { throw '-OpenConsole applies only to create/start.' }
     if ($Command -ne 'delete' -and $Force) { throw '-Force applies only to delete; stop always requests normal shutdown.' }
 }
-if ($Command -in @('list','start','stop','delete','image','configure') -and $PSVersionTable.PSEdition -eq 'Core') {
+if ($Command -in @('list','start','stop','delete','image','configure','doctor') -and $PSVersionTable.PSEdition -eq 'Core') {
     $parameters = @{}
     foreach ($entry in $PSBoundParameters.GetEnumerator()) {
         $parameters[$entry.Key] = if ($entry.Value -is [Management.Automation.SwitchParameter]) { [bool]$entry.Value } else { $entry.Value }
@@ -75,11 +89,22 @@ if ($Command -in @('list','start','stop','delete','image','configure') -and $PSV
     $payload = [Management.Automation.PSSerializer]::Serialize(@{ Script=$PSCommandPath; Parameters=$parameters; WhatIf=[bool]$WhatIfPreference; Confirm=[string]$ConfirmPreference })
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($payload))
     $program = '$p=[Management.Automation.PSSerializer]::Deserialize([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String(''' + $encoded + '''))); $WhatIfPreference=$p.WhatIf; $ConfirmPreference=[Management.Automation.ConfirmImpact]$p.Confirm; $parameters=$p.Parameters; & $p.Script @parameters'
-    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($program)))
+    if ($Command -eq 'doctor') { $program = '$ProgressPreference=''SilentlyContinue''; ' + $program }
+    $outputFormat = if ($Command -eq 'doctor' -and $AsObject) { 'XML' } else { 'Text' }
+    & "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -OutputFormat $outputFormat -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($program)))
     if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell worker failed; inspect its preceding error.' }
     return
 }
 $windowsRoot = Split-Path -Parent $PSScriptRoot
+if ($Command -eq 'doctor') {
+    . (Join-Path $PSScriptRoot 'Doctor.ps1')
+    $options = @{ Detailed=$Detailed; AsObject=$AsObject }
+    foreach ($name in @('VMRoot','ImageRoot')) {
+        if ($PSBoundParameters.ContainsKey($name)) { $options[$name]=$PSBoundParameters[$name] }
+    }
+    Invoke-WVMDoctor @options
+    return
+}
 if ($Command -eq 'setup') {
     if ($VMName -notin @('vscode','terminal','codex')) { throw 'Use wvm setup vscode, wvm setup terminal or wvm setup codex.' }
     foreach ($name in $PSBoundParameters.Keys) {
