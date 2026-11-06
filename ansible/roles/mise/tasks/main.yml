@@ -78,6 +78,11 @@
   ansible.builtin.command: "{{ mise_binary }} install --quiet --yes"
   environment:
     MISE_CONFIG_FILE: "{{ mise_config_dest }}"
+    MISE_HTTP_TIMEOUT: 2m
+  register: mise_tools_install
+  until: mise_tools_install.rc == 0
+  retries: 2
+  delay: 5
   when:
     - not ansible_check_mode
     - mise_tools_check.rc == 1
