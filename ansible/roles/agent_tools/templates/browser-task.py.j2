@@ -1,0 +1,80 @@
+#!/usr/bin/python3
+# Workstation managed browser launcher v1
+"""Give one foreground workflow its own browser session and close it on exit."""
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import tempfile
+
+
+def main():
+    command = sys.argv[1:]
+    if command[:1] == ["--"]:
+        command = command[1:]
+    if command in (["--help"], ["-h"]):
+        print("Usage: workstation-browser-task COMMAND [ARG ...]")
+        return 0
+    if not command:
+        print("Usage: workstation-browser-task COMMAND [ARG ...]", file=sys.stderr)
+        return 2
+    os.umask(0o077)
+    output = Path(tempfile.mkdtemp(prefix="task-", dir={{ workstation_agent_browser_output_dir | to_json }}))
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("AGENT_BROWSER_")}
+    environment["AGENT_BROWSER_SESSION"] = output.name
+    environment["AGENT_BROWSER_SCREENSHOT_DIR"] = str(output)
+    environment["PATH"] = {{ (workstation_home ~ '/.local/bin') | to_json }} + os.pathsep + environment.get("PATH", "")
+    print(f"Browser session: {output.name}; artifacts: {output}", file=sys.stderr)
+    process = None
+    status = 1
+
+    def terminate(signum, _frame):
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGTERM, terminate)
+    signal.signal(signal.SIGHUP, terminate)
+    try:
+        process = subprocess.Popen(command, env=environment, start_new_session=True)
+        status = process.wait()
+        if status < 0:
+            status = 128 - status
+    except KeyboardInterrupt:
+        status = 130
+    finally:
+        # Finish only this workflow's foreground process group before closing its browser.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
+        if process is not None and process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=5)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    print(f"Workflow shutdown failed: {error}", file=sys.stderr)
+                    status = status or 1
+            except OSError as error:
+                print(f"Workflow shutdown failed: {error}", file=sys.stderr)
+                status = status or 1
+        try:
+            closed = subprocess.run(
+                [{{ (workstation_home ~ '/.local/bin/agent-browser') | to_json }}, "close"],
+                env=environment, stdout=subprocess.DEVNULL, timeout=15, check=False,
+            )
+            if closed.returncode and status == 0:
+                status = 1
+            if closed.returncode:
+                print(f"Browser close failed for {output.name}; close that session explicitly.", file=sys.stderr)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            print(f"Browser cleanup failed for {output.name}: {error}", file=sys.stderr)
+            if status == 0:
+                status = 1
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main())

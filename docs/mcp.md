@@ -25,6 +25,8 @@ When using the desktop app with an SSH-connected VM, this repository manages the
 
 The Playwright launcher creates a separate private `run-*` directory under `~/.local/share/playwright-mcp/` for each invocation. It prints the host path to stderr and mounts only that directory at `/output`; stdout remains the MCP transport. Keep the printed path with the task to locate screenshots and reports. Files remain after exit and require deliberate cleanup. This separates artifacts, not host-network ports or other application services.
 
+For authorized VM-local web verification, the `agent_tools` role also provides the session-scoped agent-browser CLI and cleanup helper. It does not add another MCP server or replace the existing Playwright configuration. See [browser automation](agent-environment.md#browser-automation).
+
 ## Agent defaults
 
 The managed default is `gpt-6.1-sol` with `medium` reasoning and low verbosity. The [model documentation](https://developers.openai.com/api/docs/models/gpt-6.1-sol) confirms that reasoning level is supported. This sets the VM configuration default; desktop model selection and existing conversations may override it. No context-window override is needed.

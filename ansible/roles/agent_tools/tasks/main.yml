@@ -1,4 +1,9 @@
 ---
+- name: Configure task-scoped browser automation
+  ansible.builtin.import_tasks: agent-browser.yml
+  when: workstation_agent_browser_enabled | bool
+  tags: [agent_browser]
+
 - name: Ensure document converter directories exist
   become: false
   ansible.builtin.file:

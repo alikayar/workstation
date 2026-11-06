@@ -1,0 +1,7 @@
+# Grant namespace sandbox support to this root-owned browser only.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile workstation-agent-browser {{ workstation_agent_browser_chrome_dir }}/chrome-linux64/chrome flags=(unconfined) {
+  userns,
+}

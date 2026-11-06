@@ -1,0 +1,185 @@
+---
+- name: Require the supported local Chrome architecture
+  ansible.builtin.assert:
+    that: ansible_facts['architecture'] == 'x86_64'
+    fail_msg: The pinned local Chrome for Testing package is available only on x86_64; disable workstation_agent_browser_enabled on ARM64.
+
+- name: Inspect existing browser launchers
+  become: false
+  ansible.builtin.stat:
+    path: "{{ workstation_home }}/.local/bin/{{ item }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop: [agent-browser, workstation-browser-task]
+  register: workstation_agent_browser_launchers
+
+- name: Refuse linked or non-file browser launchers
+  ansible.builtin.assert:
+    that:
+      - not (item.stat.islnk | default(false))
+      - not item.stat.exists or (item.stat.isreg | default(false))
+      - not item.stat.exists or item.stat.size | default(0) < 16384
+    fail_msg: "Existing launcher retained; review {{ item.item }} before applying agent_tools."
+  loop: "{{ workstation_agent_browser_launchers.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Read existing browser launchers before replacement
+  become: false
+  ansible.builtin.slurp:
+    src: "{{ workstation_home }}/.local/bin/{{ item.item }}"
+  when: item.stat.exists
+  loop: "{{ workstation_agent_browser_launchers.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: workstation_agent_browser_existing
+
+- name: Preserve launchers not managed by Workstation
+  ansible.builtin.assert:
+    that: "'# Workstation managed browser launcher v1' in (item.content | b64decode)"
+    fail_msg: "Existing launcher retained; move or review {{ item.item.item }} before applying agent_tools."
+  when: not item.skipped | default(false)
+  loop: "{{ workstation_agent_browser_existing.results }}"
+  loop_control:
+    label: "{{ item.item.item }}"
+
+- name: Install browser runtime libraries and archive support
+  become: true
+  ansible.builtin.apt:
+    name: "{{ workstation_agent_browser_packages }}"
+    state: present
+
+- name: Create protected browser installation directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ workstation_agent_browser_install_dir }}"
+    - "{{ workstation_agent_browser_chrome_dir }}"
+    - /var/cache/workstation
+
+- name: Download the checksum-pinned native agent-browser binary
+  become: true
+  ansible.builtin.get_url:
+    url: "https://github.com/vercel-labs/agent-browser/releases/download/v{{ workstation_agent_browser_version }}/agent-browser-linux-x64"
+    dest: "{{ workstation_agent_browser_install_dir }}/agent-browser"
+    checksum: "sha256:{{ workstation_agent_browser_sha256 }}"
+    owner: root
+    group: root
+    mode: '0755'
+  when: not ansible_check_mode
+
+- name: Install isolated browser defaults without changing user configuration
+  become: true
+  ansible.builtin.copy:
+    content: "{{ {'headed': false, 'idleTimeout': workstation_agent_browser_idle_timeout} | to_nice_json }}\n"
+    dest: "{{ workstation_agent_browser_install_dir }}/config.json"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Download the checksum-pinned Chrome for Testing archive
+  become: true
+  ansible.builtin.get_url:
+    url: "https://storage.googleapis.com/chrome-for-testing-public/{{ workstation_agent_browser_chrome_version }}/linux64/chrome-linux64.zip"
+    dest: "/var/cache/workstation/chrome-{{ workstation_agent_browser_chrome_version }}.zip"
+    checksum: "sha256:{{ workstation_agent_browser_chrome_sha256 }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Read Chrome extraction completion
+  become: true
+  ansible.builtin.stat:
+    path: "{{ workstation_agent_browser_chrome_dir }}/.workstation-ready-{{ workstation_agent_browser_chrome_sha256 }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: workstation_agent_browser_chrome_ready
+
+- name: Read the managed Chrome executable
+  become: true
+  ansible.builtin.stat:
+    path: "{{ workstation_agent_browser_chrome_dir }}/chrome-linux64/chrome"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: workstation_agent_browser_chrome_binary
+
+- name: Extract a new or interrupted Chrome installation
+  become: true
+  ansible.builtin.unarchive:
+    src: "/var/cache/workstation/chrome-{{ workstation_agent_browser_chrome_version }}.zip"
+    dest: "{{ workstation_agent_browser_chrome_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+  when:
+    - not ansible_check_mode
+    - >-
+      not workstation_agent_browser_chrome_ready.stat.exists or
+      not workstation_agent_browser_chrome_binary.stat.exists
+
+- name: Mark successful Chrome extraction
+  become: true
+  ansible.builtin.copy:
+    content: "{{ workstation_agent_browser_chrome_sha256 }}\n"
+    dest: "{{ workstation_agent_browser_chrome_dir }}/.workstation-ready-{{ workstation_agent_browser_chrome_sha256 }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Allow user namespaces only for the managed Chrome executable
+  become: true
+  ansible.builtin.template:
+    src: agent-browser.apparmor.j2
+    dest: /etc/apparmor.d/workstation-agent-browser
+    owner: root
+    group: root
+    mode: '0644'
+  when: ansible_facts['apparmor']['status'] | default('disabled') == 'enabled'
+
+- name: Load the managed browser AppArmor policy, including after an interrupted apply
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /sbin/apparmor_parser
+      - -r
+      - /etc/apparmor.d/workstation-agent-browser
+  # Kernel policy is derived state; file changes are reported by the template task.
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - ansible_facts['apparmor']['status'] | default('disabled') == 'enabled'
+
+- name: Create user browser launcher and artifact directories
+  become: false
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ workstation_home }}/.local/bin", mode: '0755'}
+    - {path: "{{ workstation_agent_browser_output_dir }}", mode: '0700'}
+
+- name: Install the session-required agent-browser launcher
+  become: false
+  ansible.builtin.template:
+    src: agent-browser.py.j2
+    dest: "{{ workstation_home }}/.local/bin/agent-browser"
+    mode: '0755'
+
+- name: Install the browser task cleanup launcher
+  become: false
+  ansible.builtin.template:
+    src: browser-task.py.j2
+    dest: "{{ workstation_home }}/.local/bin/workstation-browser-task"
+    mode: '0755'

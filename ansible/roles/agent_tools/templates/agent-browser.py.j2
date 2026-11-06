@@ -1,0 +1,64 @@
+#!/usr/bin/python3
+# Workstation managed browser launcher v1
+"""Require task identity and use the managed local, transient browser defaults."""
+import os
+import re
+import sys
+
+
+def main():
+    binary = {{ (workstation_agent_browser_install_dir ~ '/agent-browser') | to_json }}
+    args = sys.argv[1:]
+    if args in (["--help"], ["--version"]):
+        if args == ["--help"]:
+            print("Workstation usage: agent-browser --session TASK COMMAND [FLAGS ...]. Put flags after the command; local transient sessions only.", file=sys.stderr, flush=True)
+        os.execv(binary, [binary, *args])
+    session = os.environ.get("AGENT_BROWSER_SESSION", "")
+    if args[:1] == ["--session"]:
+        if len(args) < 3:
+            raise ValueError("Usage: agent-browser --session TASK COMMAND ...")
+        if session and session != args[1]:
+            raise ValueError("This workflow already owns another AGENT_BROWSER_SESSION.")
+        session, args = args[1], args[2:]
+    if session == "default" or not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", session):
+        raise ValueError("Use workstation-browser-task COMMAND ... or supply a unique --session TASK.")
+    if not args or args[0].startswith("-"):
+        raise ValueError("Put the browser command immediately after --session TASK; put other flags after the command.")
+    if args[0] == "connect":
+        raise ValueError("Managed task sessions cannot attach to an existing browser.")
+    # These flags change session ownership, load saved state, attach another browser,
+    # or override the installed binary/config and abandoned-session cleanup defaults.
+    reserved = {
+        "--session", "--session-name", "--namespace", "--config",
+        "--profile", "--state", "--restore", "--restore-save", "--cdp",
+        "--auto-connect", "--provider", "-p", "--engine", "--executable-path",
+        "--idle-timeout", "--headed", "--args",
+    }
+    for argument in args:
+        if argument.split("=", 1)[0] == "--all" and args[0] in {"close", "quit", "exit"}:
+            raise ValueError("Close only this task session; --all is disabled.")
+        # wait --state controls element visibility, not a saved browser state file.
+        if argument == "--state" and args[0] == "wait":
+            continue
+        if argument.split("=", 1)[0] in reserved:
+            raise ValueError(f"{argument} is reserved by the task-scoped browser launcher.")
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("AGENT_BROWSER_")}
+    environment["AGENT_BROWSER_SESSION"] = session
+    if os.environ.get("AGENT_BROWSER_SCREENSHOT_DIR"):
+        environment["AGENT_BROWSER_SCREENSHOT_DIR"] = os.environ["AGENT_BROWSER_SCREENSHOT_DIR"]
+    command = [
+        binary, "--session", session,
+        "--config", {{ (workstation_agent_browser_install_dir ~ '/config.json') | to_json }},
+        "--executable-path", {{ (workstation_agent_browser_chrome_dir ~ '/chrome-linux64/chrome') | to_json }},
+        "--idle-timeout", {{ workstation_agent_browser_idle_timeout | to_json }},
+        *args,
+    ]
+    os.execve(binary, command, environment)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        sys.exit(2)
