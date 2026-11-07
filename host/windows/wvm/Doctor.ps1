@@ -104,11 +104,27 @@ function Get-DoctorCounterDelta($Before, $After) {
     return $delta
 }
 
-function Invoke-DoctorPerformance($Report, [bool]$HyperVAvailable) {
+function Invoke-DoctorPerformance($Report, [bool]$HyperVAvailable, [bool]$ShowProgress = $false) {
+    $animate = $ShowProgress -and -not [Console]::IsOutputRedirected -and -not [Console]::IsInputRedirected
     $samples = New-Object 'Collections.Generic.List[object]'
     $unavailable = New-Object 'Collections.Generic.HashSet[string]'
     for ($i = 0; $i -lt 3; $i++) {
-        if ($i) { Start-Sleep -Seconds 5 }
+        if ($i) {
+            if ($animate) {
+                $label = "Sampling performance ($($i + 1)/3) "
+                $frames = '|/-\'
+                $timer = [Diagnostics.Stopwatch]::StartNew()
+                try {
+                    while ($timer.ElapsedMilliseconds -lt 5000) {
+                        $frame = [int][Math]::Floor($timer.ElapsedMilliseconds / 125) % $frames.Length
+                        [Console]::Write("`r$label$($frames[$frame])")
+                        Start-Sleep -Milliseconds 125
+                    }
+                } finally {
+                    [Console]::Write("`r" + (' ' * ($label.Length + 1)) + "`r")
+                }
+            } else { Start-Sleep -Seconds 5 }
+        }
         $raw = @(); $cpuLoad = $null
         if (-not $unavailable.Contains('Disk')) {
             try { $raw = @(Get-CimInstance -ClassName Win32_PerfRawData_PerfDisk_PhysicalDisk -OperationTimeoutSec 5 -ErrorAction Stop) }
@@ -282,15 +298,17 @@ function Invoke-WVMDoctor {
         if ($path -notmatch '^[a-zA-Z]:[\\/]') { throw 'Doctor storage roots must be absolute local drive paths.' }
     }
 
+    $showProgress = $Detailed -and -not $AsObject
+    if ($showProgress) { Write-Host 'WVM doctor: reading host and VM information...' }
     Invoke-DoctorProbe $report Host {
         $hostInfo = Get-CimInstance -ClassName Win32_ComputerSystem -OperationTimeoutSec 5 -ErrorAction Stop
         $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem -OperationTimeoutSec 5 -ErrorAction Stop
         if ($null -eq $osInfo.FreePhysicalMemory -or $null -eq $osInfo.TotalVisibleMemorySize -or $osInfo.TotalVisibleMemorySize -le 0) { throw 'Host memory counters are unavailable.' }
         $free = [double]$osInfo.FreePhysicalMemory * 1KB
         $total = [double]$osInfo.TotalVisibleMemorySize * 1KB
-        $reserve = [Math]::Max(2GB, $total * 0.1)
+        $reserve = [Math]::Max([double]2GB, [double]($total * 0.1))
         $status = if ($free -lt $reserve) { 'WARN' } else { 'OK' }
-        Add-DoctorFinding $report $status Memory 'Host RAM' "Total=$(ConvertTo-DoctorGiB $total) GiB; available=$(ConvertTo-DoctorGiB $free) GiB; estimated VM headroom=$(ConvertTo-DoctorGiB ([Math]::Max(0,$free-$reserve))) GiB" 'Headroom reserves max(2 GiB, 10% RAM); it is a sizing hint, not an allocation guarantee.'
+        Add-DoctorFinding $report $status Memory 'Host RAM' "Total=$(ConvertTo-DoctorGiB $total) GiB; available=$(ConvertTo-DoctorGiB $free) GiB; estimated VM headroom=$(ConvertTo-DoctorGiB ([Math]::Max([double]0, [double]($free-$reserve)))) GiB" 'Headroom reserves max(2 GiB, 10% RAM); it is a sizing hint, not an allocation guarantee.'
         Add-DoctorFinding $report INFO CPU 'Host processors' "$($hostInfo.NumberOfLogicalProcessors) logical processors; hypervisor present=$($hostInfo.HypervisorPresent)" 'VM vCPU counts are allocations, not reserved physical cores.'
     }
     Invoke-DoctorProbe $report CPU {
@@ -454,7 +472,9 @@ function Invoke-WVMDoctor {
         if (-not $vms.Count) { Add-DoctorFinding $report INFO HyperV Inventory 'No registered VMs' 'No VM disk/guest checks apply.' }
     }
     if ($Detailed) {
-        Invoke-DoctorProbe $report Performance { Invoke-DoctorPerformance $report $report.InventoryComplete }
+        if ($showProgress) { Write-Host 'WVM doctor: sampling performance (about 10 seconds)...' }
+        Invoke-DoctorProbe $report Performance { Invoke-DoctorPerformance $report $report.InventoryComplete $showProgress }
+        if ($showProgress) { Write-Host 'WVM doctor: reviewing image and cache files...' }
         $budget = [pscustomobject]@{ Entries=0; Watch=[Diagnostics.Stopwatch]::StartNew() }
         $cacheRoots = @($ImageRoot, "$env:ProgramData\Workstation\Media", "$env:ProgramData\Workstation\Tools")
         $inspectedRoots = New-Object 'Collections.Generic.List[string]'
@@ -523,11 +543,43 @@ function Invoke-WVMDoctor {
         if ($Detailed) { $columns += 'SampleCPUPercent' }
         $report.VMs | Select-Object $columns | Format-Table -AutoSize -Wrap | Out-Host
         Write-Host "`nVM memory"
-        $report.VMs | Select-Object Name,AssignedGiB,StartupGiB,@{Name='DemandGiB';Expression={if ($null -eq $_.DemandGiB) {'n/a'} else {$_.DemandGiB}}},MemoryStatus | Format-Table -AutoSize -Wrap | Out-Host
-        $report.VMs | Select-Object Name,Dynamic,MinimumGiB,MaximumGiB | Format-Table -AutoSize -Wrap | Out-Host
+        $report.VMs | Select-Object Name,AssignedGiB,StartupGiB,@{Name='DemandGiB';Expression={if ($null -eq $_.DemandGiB) {'n/a'} else {$_.DemandGiB}}},@{Name='MemoryStatus';Expression={if ([string]::IsNullOrWhiteSpace([string]$_.MemoryStatus)) {'n/a'} else {$_.MemoryStatus}}} | Format-Table -AutoSize -Wrap | Out-Host
+        $dynamic = @($report.VMs | Where-Object { $_.Dynamic -eq $true })
+        if ($dynamic.Count) { $dynamic | Select-Object Name,MinimumGiB,MaximumGiB | Format-Table -AutoSize -Wrap | Out-Host }
+        if (@($report.VMs | Where-Object { $_.Dynamic -eq $false }).Count) { Write-Host 'Fixed-memory VMs use StartupGiB; inactive dynamic-memory minimum/maximum values are omitted.' }
     }
-    foreach ($section in @('Volumes','Disks','Network','DiskPerformance','Cache','Cleanup')) {
-        if ($report.$section.Count) { Write-Host "`n$section"; $report.$section | Format-Table -AutoSize -Wrap | Out-Host }
+    if ($report.Volumes.Count) { Write-Host "`nVolumes"; $report.Volumes | Format-Table -AutoSize -Wrap | Out-Host }
+    if ($report.Disks.Count) {
+        Write-Host "`nDisks"
+        foreach ($disk in $report.Disks) {
+            Write-Host ('- ' + $disk.Path)
+            Write-Host ("  File: {0} GiB | Capacity: {1} GiB | Type: {2}" -f $disk.FileGiB,$disk.CapacityGiB,$disk.Type)
+            if ($disk.Parent) { Write-Host ('  Parent: ' + $disk.Parent) }
+        }
+    }
+    if ($report.Network.Count) {
+        Write-Host "`nNetwork"
+        foreach ($adapter in $report.Network) {
+            Write-Host ("- {0} / {1} | Switch: {2}" -f $adapter.VM,$adapter.Adapter,$adapter.Switch)
+            $ips = if ([string]::IsNullOrWhiteSpace($adapter.IPs)) { 'not reported by the guest' } else { $adapter.IPs }
+            Write-Host ('  IPs: ' + $ips)
+        }
+    }
+    if ($report.DiskPerformance.Count) { Write-Host "`nDisk performance"; $report.DiskPerformance | Format-Table -AutoSize -Wrap | Out-Host }
+    if ($report.Cache.Count) {
+        Write-Host "`nCache"
+        foreach ($cache in $report.Cache) {
+            Write-Host ('- ' + $cache.Path)
+            Write-Host ("  Logical size: {0} GiB | Files: {1} | Complete: {2}" -f $cache.LogicalGiB,$cache.Files,$cache.Complete)
+        }
+    }
+    if ($report.Cleanup.Count) {
+        Write-Host "`nCleanup review (no deletion)"
+        foreach ($item in $report.Cleanup) {
+            Write-Host ('- ' + $item.Path)
+            Write-Host ("  {0} | {1}" -f $item.Kind,$item.Assessment)
+            Write-Host ('  Reason: ' + $item.Reason)
+        }
     }
     Write-Host "`nFindings"
     foreach ($finding in $report.Findings) {

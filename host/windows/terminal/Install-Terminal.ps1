@@ -117,8 +117,8 @@ if (-not $fontAvailable -and [WorkstationFont]::AddFontResourceEx($fontPath, 0, 
 }
 $scheme = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'slate-glass.json') -Raw | ConvertFrom-Json
 $profiles = @(
-    @{ guid = '{b3de38ac-e576-41d4-a1a4-375df22409f4}'; name = 'Workstation'; executable = $pwsh },
-    @{ guid = '{987c66a7-47cd-4a29-a75a-fdb36cd5ae90}'; name = 'Workstation (Windows PowerShell 5.1)'; executable = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" }
+    @{ guid = '{b3de38ac-e576-41d4-a1a4-375df22409f4}'; name = 'Workstation'; executable = $pwsh }
+
 ) | ForEach-Object {
     [ordered]@{
         guid = $_.guid; name = $_.name
