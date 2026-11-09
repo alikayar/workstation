@@ -1,17 +1,22 @@
 # Windows setup
 
-Install wvm once from the cloned checkout in a **normal PowerShell window**:
-
-~~~powershell
-.\host\windows\wvm\Install-WVM.ps1
-wvm help
-wvm setup terminal    # Optional terminal setup
-wvm setup vscode      # Optional VS Code setup and extensions
-wvm setup codex       # Optional Windows Codex defaults and instructions
-~~~
+This guide owns the optional Windows host applications, `wvm` command and Hyper-V image/VM lifecycle. Development inside Ubuntu is covered by [Ubuntu setup](getting-started.md); SSH connections and application previews are covered by the [host guide](host.md).
 
 Use an **administrator, 64-bit PowerShell window** for VM/image operations on Windows 11 Pro x64. Installing wvm itself does not install host applications or create VMs. All user-facing operations go through wvm; the other scripts are implementation details.
-Windows Pro VM creation requires Hyper-V to be enabled beforehand. The Ubuntu command enables Hyper-V if disabled, then stops before downloading media or creating a VM and asks you to restart Windows and rerun it. Pending enable/disable changes also stop for a restart. No automatic reboot occurs. Ubuntu also needs the Windows OpenSSH Client optional feature. Existing development VMs are not altered. When testing inside another VM, the outer hypervisor must expose nested virtualization and leave sufficient RAM for both levels.
+
+Windows Pro VM creation requires Hyper-V. The Ubuntu command enables Hyper-V if disabled, then stops before downloading media or creating a VM and asks you to restart Windows and rerun it. Pending enable/disable changes also stop for a restart. No automatic reboot occurs. Ubuntu also needs the Windows OpenSSH Client optional feature. Existing development VMs are not altered. When testing inside another VM, the outer hypervisor must expose nested virtualization and leave sufficient RAM for both levels.
+
+Choose the next task:
+
+| Task | Section |
+| --- | --- |
+| Install or refresh the wvm launcher | [The wvm command](#the-wvm-command) |
+| Inspect resources without changing VMs | [Host diagnostics](#read-only-host-diagnostics) |
+| Start, stop or delete an existing VM | [VM lifecycle](#start-stop-and-delete-by-vm-name) |
+| Configure host applications | [Codex](#codex-host-setup), [terminal](#terminal), [VS Code](#vs-code-defaults) |
+| Build/reuse a base image | [Packer images](#packer-first-base-images) |
+| Understand guest setup and networking | [Ubuntu clones](#ubuntu-server-2604-clones), [Windows clones](#windows-11-pro-clones) |
+| Resume interrupted work and understand coverage | [Recovery and validation](#recovery-compatibility-and-validation) |
 
 ## Source layout
 
@@ -31,12 +36,15 @@ Each VM command owns its recorded installation directory. Saved VM IDs, ownershi
 
 ## The wvm command
 
-Run this once from the checkout in a **normal PowerShell window**:
+Install wvm once from the cloned checkout in a **normal PowerShell window**:
 
-```powershell
+~~~powershell
 .\host\windows\wvm\Install-WVM.ps1
 wvm help
-```
+wvm setup terminal    # Optional terminal setup
+wvm setup vscode      # Optional VS Code setup and extensions
+wvm setup codex       # Optional Windows Codex defaults and instructions
+~~~
 
 The installer places a managed CMD launcher, PowerShell dispatcher and checkout-location record under `%LOCALAPPDATA%\Workstation\bin`, adds that directory to the user's PATH once and updates the current PowerShell process PATH. It does not install terminal applications, change profiles, enable Hyper-V or create a VM. Reruns update only files marked as Workstation-managed; unrelated files, another existing `wvm` command and linked paths are refused. The installed dispatcher is a small forwarding script; command routing and all implementation code run directly from this checkout. Keep the checkout in place, and rerun installation after moving it. Other terminal processes may retain their old PATH; signing out and back in refreshes that environment. The CMD launcher runs inbox PowerShell 5.1 with process-only `RemoteSigned`; persistent execution policies and Group Policy are not changed. Downloaded scripts still need to be trusted/unblocked before use.
 
@@ -71,11 +79,17 @@ wvm doctor -VMRoot 'D:\VMs' -ImageRoot 'D:\WorkstationImages'
 
 Doctor does not require elevation to start. It reports unavailable providers, access-denied metadata and missing counters as **UNKNOWN**; rerunning from an administrator window can improve coverage. It never elevates, enables features, starts/stops VMs or services, mounts disks, runs guest commands, rewrites settings, installs tools or deletes anything. `-AsObject` returns the report for further processing when calling the checkout `wvm.ps1` directly, as above. The installed native/CMD launcher formats the result as text and does not preserve PowerShell objects across its default-text process boundary. No report file is written. VM/create/setup options are rejected.
 
+#### Report coverage
+
 The quick report includes Windows RAM availability and a conservative new-VM sizing hint, logical CPU count, VM vCPU/CPU and assigned/startup/demand/dynamic memory, integration status, fixed-drive free space, VHDX file/virtual sizes and parent/checkpoint references, adapter switches/IPs, managed VM identity and recovery records. RAM headroom reserves the larger of 2 GiB or 10% of visible host RAM; this is a heuristic, not an admission guarantee. Running guests may not expose memory demand/status, and host metrics cannot identify a guest application's RAM consumption. Hyper-V CPU percentages and Windows host-OS load are different measures and are not added together. For fixed-memory VMs, inactive dynamic-memory limits are omitted from the human report. Long disk/cache/review paths use separate lines so narrow terminals do not squeeze them into tiny columns; cleanup reasons are always printed.
 
 Detailed mode takes three performance readings separated by five seconds. Disk latency is calculated from raw counters, not integer-rounded formatted seconds or localized counter names; an idle disk has unknown latency rather than a fabricated zero. CPU/latency readings are short workload samples, not proof of a bottleneck. Extra CIM, filesystem and network calls can extend total runtime beyond ten seconds. CPU, VM and disk providers are sampled independently: an unavailable provider does not discard the other measurements. Missing memory, CPU or volume counters are unavailable rather than zero.
 
+#### Ubuntu policy and SSH observations
+
 For identity-matching, completed Ubuntu VMs, doctor compares the saved policy identity, current Default Switch topology, live ACLs and adapter guards against the current policy recipe. It compares the owning user's managed SSH alias with the saved address without evaluating SSH config directives. Detailed mode probes only TCP/22 at the saved IPv4 address when that same address is currently reported by the running VM (one second per probe, five seconds combined wait budget). It does not scan subnets, read keys, authenticate, run SSH, verify server identity or test guest-to-host/LAN/internet traffic. Policy and SSH checks report independently, so a policy mismatch does not hide the address/SSH findings. Matching policy configuration is not a security attestation.
+
+#### Record and cache discovery
 
 Record discovery covers the default WindowsVMs/UbuntuVMs stores, the image store's `.builds`, optional `-VMRoot`, and records found above registered VM configuration paths. Custom/offline stores outside these locations are not discovered automatically. Store/image metadata inspection is capped at 200 directories per store/family. Only known diagnostic JSON filenames are read; installation secrets and Packer variable files are excluded. Linked paths are refused.
 
@@ -149,6 +163,8 @@ The host uploads only tracked ansible/dotfiles source and ansible.cfg from this 
 
 For an explicit opt-in without the yes/no question, use **wvm create -OS ubuntu-26-04 -ConfigureWorkstation**; Git identity questions still apply.
 
+### Base image and account finalization
+
 The base uses pinned **Ubuntu Server 26.04.1 amd64**, SHA256 `cc8a95cde20f6ced61a322420de00f10cc3c90ced545daa46cb9c1a117f1d927`, downloaded from Canonical over HTTPS. The temporary builder has a locked-password account with unique temporary client/server SSH keys. A strictly pinned SSH session waits for cloud-init, removes the build account, SSH host keys, temporary sudo access, installer/cloud-init state and machine identity, then runs `cloud-init clean --logs --machine-id --seed`. A token-specific sealing attestation and verified normal shutdown are required before image publication. Builder credentials and seed media are removed with its owned build directory.
 
 A clone gets a new NoCloud CIDATA seed, hostname/instance ID, SSH client and pinned SSH server identity. Cloud-init creates the chosen user with a locked password and temporary bootstrap sudo, grows the root filesystem and configures Turkish Q, English UI and Istanbul timezone inherited from the base. The user enters the console/sudo password through Ubuntu's `passwd` over pinned SSH; it is never a CLI argument, Packer variable or host password file. Finalization locks root and replaces passwordless bootstrap sudo with password-protected sudo. Host policy is applied before first boot. After completion, the seed and temporary host-key copies are detached/removed; the client key stays on the host, and the SSH alias is published. Cloud-init's per-instance cache is explicitly retained across reboots after seed removal; the generalized base has no such instance cache.
@@ -175,6 +191,8 @@ For new image-backed clones, the policy is installed **while Off before the firs
 `network-policy.json` records the VM, adapter, ownership token, topology and exact managed rules. Policy changes are journaled before mutation and verified by reading the adapter back. Interrupted installation leaves an `Applying` journal and the VM Off; rerun to reconcile only recorded rules. Foreign ACLs or a replaced adapter cause a refusal. An unchanged policy is not rewritten. No background service or scheduled task is installed.
 
 **Before switching Wi-Fi, VPN, host interface addresses or Default Switch configuration, shut down an untrusted VM.** Rerun setup while it is Off to refresh the topology and policy. Setup checks the topology again before starting a VM and refuses stale rules on a running/saved VM. This is not continuous network-change monitoring; starting a VM directly in Hyper-V Manager bypasses these wrapper checks. Never treat an old policy as protecting newly added public-address LANs or host addresses without refreshing it.
+
+### Network validation evidence
 
 Live validation on Windows 11 Pro on 2026-11-05 passed **26 checks** with the IP-only policy. Positive baselines first established reachable host TCP/UDP, peer TCP/UDP, host IPv6, LAN TCP ports 53/80/443, DNS UDP and Internet HTTPS. After policy installation, two shutdown/start cycles preserved pinned host SSH, DNS UDP and HTTPS while denying the tested host TCP/UDP, peer TCP/UDP, host IPv6 and previously reachable LAN services. A separate host-to-peer UDP control confirmed the peer remained responsive. Unchanged reapplication and recovery from an `Applying` journal with a missing rule passed; dev-vm was unchanged and the temporary peer/disk/firewall rules were removed.
 
@@ -221,7 +239,3 @@ Setup records the resolved Starship executable in `%LOCALAPPDATA%\Workstation\Te
 ## VS Code defaults
 
 See [VS Code configuration](vscode.md) for host/remote terminal defaults, preserved user settings, browser behavior and optional extensions. `wvm setup vscode` applies the Windows VS Code defaults; terminal setup is separate.
-
-`wvm setup vscode` installs/configures only VS Code in normal PowerShell and asks whether to install the recommended extension bundle (Enter accepts Yes). See [VS Code defaults](vscode.md).
-
-The CLI lives at `host/windows/wvm/`, alongside the terminal, vscode and hyperv modules. After moving a checkout or updating from the old nested CLI location, rerun `.\host\windows\wvm\Install-WVM.ps1` in normal Windows PowerShell to refresh the managed launcher and location record. The bootstrap depends only on Windows PowerShell, not Hyper-V image/media helpers.

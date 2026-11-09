@@ -1,6 +1,6 @@
 # MCP integrations
 
-MCP configuration lives in `dotfiles/codex/config.toml` and is installed as `~/.codex/config.toml` by the `codex` Ansible role, together with the pinned marketplace registration from the role defaults. Package versions are pinned; the existing `uvx` and `npx` runtimes launch the tools as subprocesses on demand.
+MCP configuration lives in `dotfiles/codex/config.toml` and is installed as `~/.codex/config.toml` by the `codex` Ansible role, together with the pinned marketplace registration from the role defaults. Local MCP package versions are pinned; the existing `uvx` and `npx` runtimes launch them as subprocesses on demand. Context7 is a hosted endpoint. Model defaults, instruction ownership and command rules are covered by [Codex configuration](codex.md).
 
 | MCP | Default | Intended use | Prerequisites |
 | --- | --- | --- | --- |
@@ -23,17 +23,15 @@ When using the desktop app with an SSH-connected VM, this repository manages the
 
 For authorized VM-local web verification, use the session-scoped agent-browser CLI and cleanup helper from the `agent_tools` role. Browser automation does not require an MCP server. See [browser automation](agent-environment.md#browser-automation).
 
-## Agent defaults
-
-The managed default is `gpt-6.1-sol` with `medium` reasoning and low verbosity. The [model documentation](https://developers.openai.com/api/docs/models/gpt-6.1-sol) confirms that reasoning level is supported. This sets the VM configuration default; desktop model selection and existing conversations may override it. No context-window override is needed.
-
-Global preferences live in `dotfiles/codex/AGENTS.md`; this repository's `AGENTS.md` explains workstation ownership and onboarding. Command safeguards live in `dotfiles/codex/rules/default.rules`. Keep these layers separate; repository instructions and the relevant Workstation tool guides provide the execution workflow. See the official [AGENTS.md guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and [command rules](https://learn.chatgpt.com/docs/agent-configuration/rules).
-
 ## draw.io skill plugin
 
-The separate `drawio@drawio` skill plugin remains enabled for authoring diagram files. The draw.io MCP server is not installed or configured: the reviewed `@drawio/mcp@1.10.1` release downloads mutable CDN JavaScript and evaluates it without a pinned hash or signature. MCP shape lookup, routing and layout tools are unavailable. Keep editable sources in the project and apply its diagram style rules.
+Diagram authoring uses the separate draw.io skill plugin, not an MCP server. Installation, capabilities and marketplace-conflict recovery are maintained in the [Codex plugin guide](codex.md#drawio-plugin).
 
-The full `codex` role manages the marketplace source and revision in the configuration; it refuses to update an existing marketplace checkout at a different revision. A plugin-only apply can report `already added from a different source` when another source is registered. After authorizing replacement, run `codex plugin marketplace remove drawio --json`, then reapply the `codex` role to register the source and revision pinned in its defaults. The `marketplace list` command can omit a conflicting registration, so an empty list is not proof that registration is absent. Do not delete the plugin cache to resolve this error.
+## Context7
+
+Context7 uses the remote Streamable HTTP endpoint for public, version-specific library documentation; no local server or API key is required for anonymous access. Confirm the active project's installed versions before querying, and prefer official sources where results disagree.
+
+Anonymous access may have lower limits. If authentication is needed, use the provider's documented OAuth/API-key procedure and keep credentials outside tracked files. Do not paste tokens into the managed configuration, which Ansible replaces. Workstation does not provision a Context7 account.
 
 ## Serena
 

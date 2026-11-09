@@ -15,10 +15,10 @@ sudo apt-get install --yes ansible-core python3-debian sudo
 
 ## Set your Git identity
 
-Create the local host variables file and set the identity used by the managed `.gitconfig`:
+Create the ignored local host variables file without replacing an existing one, then set the identity used by the managed `.gitconfig`:
 
 ```bash
-cp ansible/host_vars/localhost.example.yml ansible/host_vars/localhost.yml
+cp -n ansible/host_vars/localhost.example.yml ansible/host_vars/localhost.yml
 nano ansible/host_vars/localhost.yml
 ```
 
@@ -107,7 +107,7 @@ ansible-playbook ansible/site.yml --tags AFFECTED_TAG --check --diff --ask-becom
 ansible-playbook ansible/site.yml --tags AFFECTED_TAG --ask-become-pass
 ```
 
-Replace the placeholders; do not run them literally. Return to the recorded branch after recovery. Source rollback is not a complete machine rollback: APT updates, an existing Codex CLI, container/application data and removed or overwritten user files are not automatically restored. Use the checkpoint/approved recovery path when those states matter; changing a Git ref cannot restore them. Retain old tool environments while any process may still use them. Plugin revision conflicts have a [specific recovery procedure](mcp.md#drawio-skill-plugin); do not delete the plugin cache or rebuild the VM as a shortcut.
+Replace the placeholders; do not run them literally. Return to the recorded branch after recovery. Source rollback is not a complete machine rollback: APT updates, an existing Codex CLI, container/application data and removed or overwritten user files are not automatically restored. Use the checkpoint/approved recovery path when those states matter; changing a Git ref cannot restore them. Retain old tool environments while any process may still use them. Plugin revision conflicts have a [specific recovery procedure](codex.md#recover-a-marketplace-conflict); do not delete the plugin cache or rebuild the VM as a shortcut.
 
 ## Inspect the agent environment
 
@@ -144,7 +144,7 @@ If the first command returns `/usr/bin/zsh` and the second returns `bash`, the a
 exec /usr/bin/zsh -l
 ```
 
-If newly opened terminals also start Bash, inspect the terminal application's profile. Workstation does not rewrite Windows Terminal or VS Code settings, or redirect intentional Bash sessions through `.bashrc`.
+If newly opened terminals also start Bash, inspect the terminal application's profile. The shell role does not rewrite terminal application profiles or redirect intentional Bash sessions through `.bashrc`. Separate Windows setup and Ubuntu VS Code settings may supply defaults; existing preferences can take precedence.
 
 For VS Code connected through WSL or Remote-SSH, run **Terminal: Select Default Profile** in the remote window and select **zsh**, then create a new terminal. If the detected shell/profile is stale, close and reconnect the remote window. A remote Linux profile can explicitly use `/usr/bin/zsh` with `-l`; configure it in the remote settings rather than changing unrelated local Windows profiles. See [VS Code terminal profiles](https://code.visualstudio.com/docs/terminal/profiles).
 
@@ -196,18 +196,6 @@ GPU drivers and AI model environments are not managed by Workstation. NVIDIA's W
 
 Use the [verification guide](verification.md) to choose source checks, isolated regressions, full Ubuntu provisioning or explicit browser smoke. It owns the commands, prerequisites, artifacts and CI coverage. An installed tool does not authorize its execution.
 
-## PHP and Composer through mise
+## PHP and Composer
 
-PHP is pinned in `dotfiles/mise/config.toml`. The `php` role installs Ubuntu build dependencies before the `mise` role compiles PHP through its [vfox backend](https://github.com/jdx/vfox-php). The backend enables common extensions including MySQL, mbstring, XML, ZIP and curl and installs Composer alongside PHP. The mise role then replaces the bundled Composer with the version and checksum pinned in `ansible/roles/mise/defaults/main.yml`. No application service is started.
-
-Apply the PHP prerequisites and managed runtime configuration from the Workstation root:
-
-```sh
-ansible-playbook ansible/site.yml --tags php --ask-become-pass
-```
-
-The tag includes the mise role and therefore installs all missing configured tools, not only PHP. Enter the sudo password in your terminal. PHP's first installation compiles from source and takes longer than downloading a runtime binary.
-
-After PHP and pinned Composer are installed, the old Workstation launcher at `~/.local/bin/composer` is removed so the mise shim owns Composer resolution. Existing Ubuntu PHP packages are left installed for applications that explicitly use `/usr/bin/php`; their extensions and `/etc/php` settings do not configure mise's PHP. Project dependencies remain local: run `composer install` in the project's Composer directory.
-
-The PHP backend sets `COMPOSER_HOME` inside the selected PHP installation. Existing global Composer packages and settings are not automatically migrated; project lockfiles remain authoritative.
+Use the [mise and PHP guide](mise.md#php-and-composer) for source-build prerequisites, the scoped apply command, Composer ownership and migration limits.

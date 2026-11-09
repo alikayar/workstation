@@ -10,9 +10,11 @@ Run checks from the repository root only when their scope is authorized. Source 
 | Full Ubuntu install | Manually dispatch `CI` on the selected revision | Existing Ubuntu 24.04/26.04 x86_64 jobs provision disposable hosted runners, require `changed=0` on a second apply and run installed-tool regressions. |
 | Browser smoke | `python3 tests/browser_smoke.py`, or select the manual CI `browser` input | Starts one temporary loopback fixture, exercises agent-browser, Lighthouse and SiteOne sequentially, saves screenshots/native reports and closes owned resources. No external target site. |
 
+Choose [Ubuntu setup/update](getting-started.md) for provisioning procedures and the [Windows validation notes](windows.md#recovery-compatibility-and-validation) for Hyper-V coverage. The commands below maintain Workstation itself; consuming applications own their checks.
+
 ## Local source checks
 
-Install the normal check prerequisites if they are not already present: Ansible, ansible-lint and the Debian support library. The prepared Workstation also supplies actionlint.
+These commands require Ansible, ansible-lint and the Debian support library; the prepared Workstation also supplies actionlint. Installing missing prerequisites is a separate environment change.
 
 ```sh
 ansible-playbook ansible/site.yml --syntax-check

@@ -21,7 +21,7 @@ Run project code, dependencies and coding agents inside a dedicated Ubuntu VM. C
 
 - **Ubuntu development setup.** Ansible configures the shell, Git, language runtimes, Docker, Codex and MCP integrations. Browser sessions are scoped to each task and cleaned up afterward.
 - **Optional Windows tooling.** `wvm` creates and manages Hyper-V guests from reusable Packer images. It also configures host apps and provides read-only diagnostics through `wvm doctor`.
-- **Website audits.** The official Lighthouse CLI reuses managed Chrome; native SiteOne adds bounded site crawling. [Installation](docs/agent-environment.md#website-audits) needs no application dependency or separate audit checkout; both tools produce native HTML/JSON reports.
+- **Development and agent tooling.** Shared tools support code discovery, browser automation, diagnostics and page/site audits across projects. See the [tooling summary](#included-tooling) below and the [full inventory](docs/tools.md) for details.
 
 ## Included tooling
 
@@ -90,16 +90,24 @@ If prompted to enable Hyper-V, restart Windows and rerun the create command. The
 
 ## Isolation boundaries
 
-Use a fresh VM for unfamiliar code. Keep work credentials, shared host folders and access to internal services out of it. On Hyper-V, the Ubuntu workflow applies a host-enforced IP policy on a shared switch. See the [network policy and validation notes](docs/windows.md) for its scope and limits. When using an existing VM, configure isolation through your hypervisor or provider.
+Use a fresh VM for unfamiliar code. Keep work credentials, shared host folders and access to internal services out of it. On Hyper-V, the Ubuntu workflow applies a host-enforced IP policy on a shared switch. See the [network policy and validation notes](docs/windows.md#network-isolation) for its scope and limits. When using an existing VM, configure isolation through your hypervisor or provider.
 
 ## Documentation
 
-- [Host connections and application previews](docs/host.md)
-- [Ubuntu setup, updates and recovery](docs/getting-started.md)
-- [Verification levels and CI evidence](docs/verification.md)
-- [Windows setup, Hyper-V, and `wvm`](docs/windows.md)
-- [Agent environment and browser automation](docs/agent-environment.md)
-- [Codex configuration](docs/codex.md) and [MCP integrations](docs/mcp.md)
+Start with the guide for your next task. Each topic has one maintained home.
+
+| Task | Guide |
+| --- | --- |
+| Connect a host, open a remote project or preview an app | [Host connections](docs/host.md) |
+| Install Ubuntu defaults, update or recover an apply | [Ubuntu setup](docs/getting-started.md) |
+| Create/manage Hyper-V VMs or configure Windows apps | [Windows and wvm](docs/windows.md) |
+| Find an installed tool and its provisioning owner | [Tool inventory](docs/tools.md) |
+| Use browsers, repository indexing, conversion or audit CLIs | [Agent environment](docs/agent-environment.md) |
+| Manage Codex settings, instructions and diagram plugin | [Codex configuration](docs/codex.md) |
+| Activate an optional server or resolve MCP prerequisites | [MCP integrations](docs/mcp.md) |
+| Understand shell activation and project runtime selection | [Shell](docs/shell.md), [mise/PHP/Composer](docs/mise.md) |
+| Configure host and remote editor defaults | [VS Code](docs/vscode.md) |
+| Choose checks and understand CI evidence | [Verification](docs/verification.md) |
 
 ## License
 

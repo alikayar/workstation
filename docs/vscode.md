@@ -1,6 +1,24 @@
 # VS Code on Windows and Ubuntu
 
-Run `wvm setup vscode` in normal Windows PowerShell to install VS Code and add missing editor defaults. Setup reports the installed Stable version and preserves it. If absent, it asks whether to install pinned Stable **1.145.0 x64 User Setup**; No stops before changing settings or extensions. It then asks `Install recommended extensions (Remote SSH, Catppuccin, vscode-icons)? [Y/n]`. Enter accepts; `n` skips all extension installation and leaves existing extensions intact. Terminal setup is separate: run `wvm setup terminal` when PowerShell, Windows Terminal and Starship are needed. No PowerShell 7 installation is required for the standalone VS Code command. The Ubuntu playbook includes a `vscode` role; apply it alone with `ansible-playbook ansible/site.yml --tags vscode` from this repository.
+Workstation manages separate Windows host and Ubuntu Remote-SSH defaults. Windows setup reviews conflicting preferences interactively; Ubuntu adds missing remote settings while preserving existing values.
+
+## Apply defaults
+
+Run in normal Windows PowerShell from an installed [wvm setup](windows.md#the-wvm-command):
+
+```powershell
+wvm setup vscode
+```
+
+Setup reuses an existing Stable installation. If absent, it asks before installing the pinned x64 User Setup; No stops before settings or extension changes. It then asks whether to install Remote SSH, Catppuccin and vscode-icons; Enter accepts, `n` skips the bundle. No PowerShell 7 installation is required. Run `wvm setup terminal` separately for PowerShell, Windows Terminal and Starship.
+
+For Ubuntu remote settings, run from the repository root inside Ubuntu:
+
+```sh
+ansible-playbook ansible/site.yml --tags vscode
+```
+
+## Settings ownership and recovery
 
 Host defaults live in `host/windows/vscode/settings.json`; remote defaults live in `dotfiles/vscode/remote-settings.json`. Windows selects the PowerShell profile and Nerd Font prepared by terminal setup; Ubuntu selects Zsh. Shell integration is enabled, scrollback is 1,000 lines and closed windows do not automatically revive terminal processes. Persistence across window reloads is retained.
 
@@ -10,7 +28,11 @@ The Ubuntu Ansible role runs its helper directly from the local playbook without
 
 The integrated browser uses remote HTTP/HTTPS proxying and workspace storage unless an existing preference overrides them. Remote proxying is a preview feature and is not a VM isolation boundary. Select ephemeral storage in VS Code for disposable browser sessions.
 
+## Extensions and appearance
+
 The optional bundle installs Remote SSH, Catppuccin and vscode-icons locally. Different active theme/icon choices use the same override prompt; otherwise Catppuccin Macchiato and vscode-icons are selected. Installed extension IDs and versions are inspected first; existing versions (including disabled extensions) are left alone, and only missing IDs are installed. Other theme/icon extensions are not treated as package conflicts and are not uninstalled. Language-specific extensions are left to the user and project; Ansible tooling belongs in Ubuntu.
+
+## Resource use and privacy
 
 Remote settings exclude `.venv`, `__pycache__` and `.pytest_cache` from watching and search. Language servers have separate indexing settings. Put build-directory exclusions and language-server limits in the relevant project. These defaults impose no global Node heap cap and promise no fixed memory saving.
 
@@ -20,6 +42,6 @@ Host defaults disable built-in AI features and VS Code telemetry, hide extension
 
 ## Pinned Windows installation
 
-The single installer is host/windows/vscode/Install-VSCode.ps1. There is no generic applications installer or winget dependency for VS Code. First-install media is pinned to Microsoft commit a717861c07586a53d83b80d742cd3f59b20a6273, SHA256 3f7c8b905cfd4795b9d5ff9cfded9085bd2fa14a1d5001e94d07c89f021d9950. The download must match the hash and have a valid Microsoft Corporation Authenticode signature before execution. Installation is user-scoped, does not launch VS Code or reboot Windows, and is verified afterward. Existing Stable versions are neither upgraded nor downgraded. Automatic updates remain under the existing user policy; only initial installation media is pinned. Metadata source: [Microsoft version endpoint](https://update.code.visualstudio.com/api/versions/1.145.0/win32-x64-user/stable).
+The [Windows installer](../host/windows/vscode/Install-VSCode.ps1) owns the initial Stable version, Microsoft download URL and SHA256 pin. It requires both the expected checksum and a valid Microsoft Corporation Authenticode signature. Installation is user-scoped and does not launch VS Code or reboot Windows. Existing versions are neither upgraded nor downgraded; automatic updates remain under the user's existing policy. There is no generic applications installer or WinGet dependency for VS Code.
 
-Settings parsing preserves JSON scalar types, nested arrays and date-like strings on PowerShell 5.1 and 7.x. JSONC comments are removed before handling trailing commas. Optional extensions are installed after conflict review and before writing settings, so an installation failure does not activate an unavailable theme. Rerunning the wvm bootstrap leaves identical launcher and location files untouched.
+Settings parsing preserves JSON scalar types, nested arrays and date-like strings on PowerShell 5.1 and 7.x. JSONC comments are removed before handling trailing commas. Optional extensions are installed after conflict review and before writing settings, so an installation failure does not activate an unavailable theme.
