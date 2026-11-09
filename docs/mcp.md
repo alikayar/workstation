@@ -4,7 +4,6 @@ MCP configuration lives in `dotfiles/codex/config.toml` and is installed as `~/.
 
 | MCP | Default | Intended use | Prerequisites |
 | --- | --- | --- | --- |
-| Playwright | Enabled | Browser interaction and screenshots | Docker with the existing pinned Chromium image |
 | Context7 | Enabled | Public, version-specific library documentation | Internet; API key not necessary for anonymous access |
 | Serena | Enabled | Symbol and reference navigation | `uvx`; a Git checkout; applicable language servers |
 | Chrome DevTools | Disabled | Performance traces, network and browser debugging | `npx` and Chrome installed **inside Ubuntu** |
@@ -22,9 +21,7 @@ Restart Codex after updating the configuration. Listing an MCP does not verify i
 
 When using the desktop app with an SSH-connected VM, this repository manages the VM-side files. The CLI opt-in examples below start a new CLI session; they do not enable tools in an already running desktop chat. Treat the current chat's exposed tools as the available set and distinguish them from the configured server list.
 
-The Playwright launcher creates a separate private `run-*` directory under `~/.local/share/playwright-mcp/` for each invocation. It prints the host path to stderr and mounts only that directory at `/output`; stdout remains the MCP transport. Keep the printed path with the task to locate screenshots and reports. Files remain after exit and require deliberate cleanup. This separates artifacts, not host-network ports or other application services.
-
-For authorized VM-local web verification, the `agent_tools` role also provides the session-scoped agent-browser CLI and cleanup helper. It does not add another MCP server or replace the existing Playwright configuration. See [browser automation](agent-environment.md#browser-automation).
+For authorized VM-local web verification, use the session-scoped agent-browser CLI and cleanup helper from the `agent_tools` role. Browser automation does not require an MCP server. See [browser automation](agent-environment.md#browser-automation).
 
 ## Agent defaults
 
@@ -44,9 +41,11 @@ Serena runs `serena-agent==2.1.0` through `uvx` with `--context=codex --project-
 
 ## Chrome DevTools
 
-This is an explicit opt-in alternative to Playwright when browser performance and memory profiling are requested. The `1.12.0` server launches an isolated, headless Chrome process. A Windows installation of Chrome does not automatically make Chrome available inside Ubuntu WSL.
+Enable this MCP explicitly when browser performance and memory profiling are requested. The `1.12.0` server launches an isolated, headless Chrome process using the executable path rendered from the managed Chrome directory. A Windows installation of Chrome does not automatically make Chrome available inside Ubuntu WSL.
 
-After providing Chrome in Ubuntu, activate it for the session:
+Native flags disable usage statistics and automatic CrUX URL lookups. Diagnostics use the selected local browser; retrieving field data remains a separate requested action.
+
+After installing the managed browser in Ubuntu, activate it for the session:
 
 ```sh
 codex -c 'mcp_servers.chrome_devtools.enabled=true'

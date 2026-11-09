@@ -1,0 +1,111 @@
+---
+- name: Require a supported crawler architecture
+  ansible.builtin.assert:
+    that: ansible_facts['architecture'] in agent_tools_siteone_archives
+    fail_msg: Disable agent_tools_siteone_enabled on architectures without a pinned archive.
+
+- name: Inspect the existing crawler entry point
+  become: false
+  ansible.builtin.stat:
+    path: "{{ workstation_home }}/.local/bin/siteone-crawler"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: agent_tools_siteone_existing
+
+- name: Inspect ownership of the previous versioned crawler installation
+  become: false
+  ansible.builtin.find:
+    paths: "{{ agent_tools_siteone_existing.stat.lnk_source | dirname }}"
+    patterns: '.workstation-siteone-ready-*'
+    hidden: true
+    file_type: file
+  register: agent_tools_siteone_previous
+  when: agent_tools_siteone_existing.stat.islnk | default(false)
+
+- name: Preserve unrelated crawler installations
+  ansible.builtin.assert:
+    that:
+      - >-
+        not agent_tools_siteone_existing.stat.exists or
+        ((agent_tools_siteone_existing.stat.islnk | default(false)) and
+        ((agent_tools_siteone_existing.stat.lnk_source | default('')) == agent_tools_siteone_dir ~ '/siteone-crawler' or
+        (((agent_tools_siteone_previous.matched | default(0)) > 0 or
+        (agent_tools_siteone_existing.stat.lnk_source | default('')).startswith(workstation_home ~ '/.local/share/workstation/siteone-crawler-')) and
+        (agent_tools_siteone_existing.stat.lnk_source | default('')).endswith('/siteone-crawler'))))
+    fail_msg: Existing siteone-crawler retained; review its ownership before applying.
+
+- name: Create user-local crawler installation directories
+  become: false
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ workstation_home }}/.local/bin"
+    - "{{ agent_tools_siteone_dir }}"
+
+- name: Download the checksum-pinned upstream crawler
+  become: false
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/janreges/siteone-crawler/releases/download/v{{ agent_tools_siteone_version
+      }}/siteone-crawler-v{{ agent_tools_siteone_version }}-linux-musl-{{
+      agent_tools_siteone_archives[ansible_facts['architecture']].arch }}.tar.gz
+    dest: "{{ agent_tools_siteone_dir }}/archive.tar.gz"
+    checksum: "sha256:{{ agent_tools_siteone_archives[ansible_facts['architecture']].sha256 }}"
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Inspect crawler extraction completion
+  become: false
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop:
+    - "{{ agent_tools_siteone_dir }}/.workstation-siteone-ready-{{ agent_tools_siteone_archives[ansible_facts['architecture']].sha256 }}"
+    - "{{ agent_tools_siteone_dir }}/siteone-crawler"
+  register: agent_tools_siteone_ready
+
+- name: Clear incomplete crawler extraction state
+  become: false
+  ansible.builtin.file:
+    path: "{{ agent_tools_siteone_dir }}/.workstation-siteone-ready-{{ agent_tools_siteone_archives[ansible_facts['architecture']].sha256 }}"
+    state: absent
+  when:
+    - not ansible_check_mode
+    - >-
+      not agent_tools_siteone_ready.results[0].stat.exists or
+      not (agent_tools_siteone_ready.results[1].stat.executable | default(false))
+
+- name: Extract a new or interrupted native crawler installation
+  become: false
+  ansible.builtin.unarchive:
+    src: "{{ agent_tools_siteone_dir }}/archive.tar.gz"
+    dest: "{{ agent_tools_siteone_dir }}"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+  when:
+    - not ansible_check_mode
+    - >-
+      not agent_tools_siteone_ready.results[0].stat.exists or
+      not (agent_tools_siteone_ready.results[1].stat.executable | default(false))
+
+- name: Mark successful crawler extraction
+  become: false
+  ansible.builtin.copy:
+    content: "{{ agent_tools_siteone_archives[ansible_facts['architecture']].sha256 }}\n"
+    dest: "{{ agent_tools_siteone_dir }}/.workstation-siteone-ready-{{ agent_tools_siteone_archives[ansible_facts['architecture']].sha256 }}"
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Link the upstream crawler directly without a wrapper
+  become: false
+  ansible.builtin.file:
+    src: "{{ agent_tools_siteone_dir }}/siteone-crawler"
+    dest: "{{ workstation_home }}/.local/bin/siteone-crawler"
+    state: link
+  when: not ansible_check_mode

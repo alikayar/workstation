@@ -176,6 +176,7 @@
     src: agent-browser.py.j2
     dest: "{{ workstation_home }}/.local/bin/agent-browser"
     mode: '0755'
+  tags: [agent_browser_launcher]
 
 - name: Install the browser task cleanup launcher
   become: false

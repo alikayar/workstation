@@ -36,7 +36,11 @@ required = false
 # Opt-in performance traces. Requires Chrome in the Ubuntu environment.
 [mcp_servers.chrome_devtools]
 command = "npx"
-args = ["-y", "chrome-devtools-mcp@1.12.0", "--headless", "--isolated"]
+args = [
+  "-y", "chrome-devtools-mcp@1.12.0", "--headless", "--isolated",
+  "--no-usage-statistics", "--no-performance-crux",
+  "--executablePath={{ agent_tools_browser_chrome_dir }}/chrome-linux64/chrome",
+]
 enabled = false
 startup_timeout_sec = 120
 required = false
@@ -58,42 +62,3 @@ env_vars = ["DATABASE_URI"]
 enabled = false
 startup_timeout_sec = 120
 required = false
-
-[mcp_servers.playwright]
-command = "sh"
-args = ["-c", 'exec "$HOME/.local/bin/workstation-playwright"']
-startup_timeout_sec = 120
-enabled_tools = [
-  "browser_click",
-  "browser_close",
-  "browser_console_messages",
-  "browser_drag",
-  "browser_drop",
-  "browser_evaluate",
-  "browser_file_upload",
-  "browser_fill_form",
-  "browser_find",
-  "browser_handle_dialog",
-  "browser_hover",
-  "browser_navigate",
-  "browser_navigate_back",
-  "browser_network_request",
-  "browser_network_requests",
-  "browser_press_key",
-  "browser_resize",
-  "browser_run_code",
-  "browser_run_code_unsafe",
-  "browser_select_option",
-  "browser_snapshot",
-  "browser_tabs",
-  "browser_take_screenshot",
-  "browser_type",
-  "browser_wait_for",
-]
-default_tools_approval_mode = "approve"
-
-[mcp_servers.playwright.tools.browser_run_code_unsafe]
-approval_mode = "prompt"
-
-[mcp_servers.playwright.tools.browser_run_code]
-approval_mode = "prompt"

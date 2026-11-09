@@ -1,0 +1,122 @@
+---
+- name: Inspect managed Chrome and the Lighthouse entry point
+  become: false
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop:
+    - "{{ agent_tools_browser_chrome_dir }}/chrome-linux64/chrome"
+    - "{{ workstation_home }}/.local/bin/lighthouse"
+  register: agent_tools_lighthouse_paths
+
+- name: Require the managed browser before installing Lighthouse
+  ansible.builtin.assert:
+    that: agent_tools_lighthouse_paths.results[0].stat.executable | default(false)
+    fail_msg: Apply agent_browser first for managed Chrome.
+  when: not ansible_check_mode
+
+- name: Preserve unrelated Lighthouse installations
+  ansible.builtin.assert:
+    that:
+      - not (agent_tools_lighthouse_paths.results[1].stat.islnk | default(false))
+      - not agent_tools_lighthouse_paths.results[1].stat.exists or (agent_tools_lighthouse_paths.results[1].stat.isreg | default(false))
+      - not agent_tools_lighthouse_paths.results[1].stat.exists or agent_tools_lighthouse_paths.results[1].stat.size | default(0) < 8192
+    fail_msg: Review any existing Lighthouse entry point before replacement.
+
+- name: Read the existing Lighthouse entry point
+  become: false
+  ansible.builtin.slurp:
+    src: "{{ workstation_home }}/.local/bin/lighthouse"
+  register: agent_tools_lighthouse_existing
+  when: agent_tools_lighthouse_paths.results[1].stat.exists
+
+- name: Preserve entry points not managed by Workstation
+  ansible.builtin.assert:
+    that: "'# Workstation managed Lighthouse launcher v1' in (agent_tools_lighthouse_existing.content | b64decode)"
+    fail_msg: Existing lighthouse retained; review its ownership before applying.
+  when: agent_tools_lighthouse_paths.results[1].stat.exists
+
+- name: Locate the workstation Node installation
+  become: false
+  ansible.builtin.command:
+    argv: ["{{ mise_binary }}", where, node]
+    chdir: "{{ workstation_home }}"
+  register: agent_tools_lighthouse_node
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Create the isolated Lighthouse installation directory
+  become: false
+  ansible.builtin.file:
+    path: "{{ agent_tools_lighthouse_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Inspect Lighthouse installation completion
+  become: false
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  loop:
+    - "{{ agent_tools_lighthouse_dir }}/.workstation-ready-{{ agent_tools_lighthouse_version }}"
+    - "{{ agent_tools_lighthouse_dir }}/node_modules/lighthouse/cli/index.js"
+  register: agent_tools_lighthouse_ready
+
+- name: Clear incomplete Lighthouse installation state before reinstalling
+  become: false
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ agent_tools_lighthouse_dir }}/.workstation-ready-{{ agent_tools_lighthouse_version }}"
+    - "{{ agent_tools_lighthouse_dir }}/node_modules"
+  when:
+    - not ansible_check_mode
+    - >-
+      not agent_tools_lighthouse_ready.results[0].stat.exists or
+      not agent_tools_lighthouse_ready.results[1].stat.exists
+
+- name: Install the pinned official Lighthouse package
+  become: false
+  ansible.builtin.command:
+    argv:
+      - "{{ mise_binary }}"
+      - exec
+      - --
+      - npm
+      - install
+      - --prefix
+      - "{{ agent_tools_lighthouse_dir }}"
+      - --ignore-scripts
+      - --no-audit
+      - --no-fund
+      - --save-exact
+      - "lighthouse@{{ agent_tools_lighthouse_version }}"
+    chdir: "{{ workstation_home }}"
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - >-
+      not agent_tools_lighthouse_ready.results[0].stat.exists or
+      not agent_tools_lighthouse_ready.results[1].stat.exists
+
+- name: Mark successful Lighthouse installation
+  become: false
+  ansible.builtin.copy:
+    content: "{{ agent_tools_lighthouse_version }}\n"
+    dest: "{{ agent_tools_lighthouse_dir }}/.workstation-ready-{{ agent_tools_lighthouse_version }}"
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Install the Lighthouse entry point
+  become: false
+  ansible.builtin.template:
+    src: lighthouse.sh.j2
+    dest: "{{ workstation_home }}/.local/bin/lighthouse"
+    mode: '0755'
+  when: not ansible_check_mode

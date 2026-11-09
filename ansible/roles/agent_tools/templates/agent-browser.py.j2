@@ -38,7 +38,7 @@ def main():
         if argument.split("=", 1)[0] == "--all" and args[0] in {"close", "quit", "exit"}:
             raise ValueError("Close only this task session; --all is disabled.")
         # wait --state controls element visibility, not a saved browser state file.
-        if argument == "--state" and args[0] == "wait":
+        if argument.split("=", 1)[0] == "--state" and args[0] == "wait":
             continue
         if argument.split("=", 1)[0] in reserved:
             raise ValueError(f"{argument} is reserved by the task-scoped browser launcher.")

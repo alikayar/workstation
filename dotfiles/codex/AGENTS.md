@@ -39,4 +39,6 @@ Across tool calls, generate and record one task UUID and use `agent-browser --se
 
 Use repository docs and current source/contracts. Prefer direct search for small known changes. When useful, `workstation-graphify info`, `index`, `query "symbol"` and `update` provide a derived local index; update on source changes/staleness, not every turn. `index --docs docs` adds semantic extraction via existing `codex exec` access and remembers that scope for updates. It needs no new API key, provider env or project dependency. Cache stays outside Git; Codex retains its normal model data boundary. Verify graph candidates against current APIs and adopted architecture.
 
+For requested website audits, use the installed `lighthouse` and `siteone-crawler` CLIs with native reports. No neighboring audit checkout is required.
+
 Keep Markdown paragraphs on one line. Update canonical project docs instead of duplicating manuals. Preserve the project's license and required asset notices, preferably with the asset. Avoid blanket third-party notice pages, duplicate license READMEs, theme/provenance reports or license-doc edits for routine visual/copy changes unless an actual license/catalog requires them.

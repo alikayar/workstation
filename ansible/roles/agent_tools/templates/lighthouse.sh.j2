@@ -1,0 +1,5 @@
+#!/bin/sh
+# Workstation managed Lighthouse launcher v1
+# CHROME_PATH is Lighthouse's native browser selection, supplied internally.
+export CHROME_PATH={{ (agent_tools_browser_chrome_dir ~ '/chrome-linux64/chrome') | quote }}
+exec {{ ((agent_tools_lighthouse_node.stdout | trim) ~ '/bin/node') | quote }} {{ (agent_tools_lighthouse_dir ~ '/node_modules/lighthouse/cli/index.js') | quote }} "$@"

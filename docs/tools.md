@@ -6,6 +6,9 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | --- | --- | --- | --- |
 | Ansible (`ansible-playbook`) | Apply the workstation configuration. | Prerequisite: `ansible-core`. | [Documentation](https://docs.ansible.com/ansible/latest/) |
 | Graphify (`workstation-graphify`) | Local graph discovery with separate checkout caches and optional Codex semantic docs extraction. | `agent_tools` role: pinned isolated Graphify and mise Python; no application dependencies or upstream skill installation. | [Local workflow](agent-environment.md#repository-knowledge-indexing) |
+| SiteOne (`siteone-crawler`) | Bounded site crawling, link/metadata inventories and native JSON/HTML reports. | `agent_tools` role: checksum-pinned upstream 2.5.1 Linux static binary (x64/ARM64), direct symlink; no runtime service or project dependency. | [Installation](agent-environment.md#website-audits), [upstream release](https://github.com/janreges/siteone-crawler/releases/tag/v2.5.1) |
+| Lighthouse (`lighthouse`) | Native page performance, accessibility, best-practices and technical SEO reports. | `agent_tools` role: pinned official npm package, workstation Node and existing managed Chrome. | [Installation](agent-environment.md#website-audits), [upstream CLI](https://github.com/GoogleChrome/lighthouse#using-the-node-cli) |
+| agent-browser, Chrome for Testing (`workstation-browser-task`) | Session-scoped browser automation with task cleanup and retained screenshots. | `agent_tools` role: checksum-pinned native CLI and managed Chrome on x86_64; no shared Playwright test runner. | [Browser automation](agent-environment.md#browser-automation) |
 | Zsh | Interactive shell with managed history, completion, and aliases. | `shell` role: `zsh`. | [Documentation](https://zsh.sourceforge.io/Doc/) |
 | Starship | Prompt for the managed Zsh environment. | `shell` role: pinned release binary. | [Documentation](https://starship.rs/config/) |
 | zsh-autosuggestions | Suggest commands while typing. | `shell` role: Ubuntu package. | [Repository](https://github.com/zsh-users/zsh-autosuggestions) |
@@ -33,7 +36,6 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | tmux | Persistent terminal sessions for SSH and long-running processes. | `cli_tools` role: `tmux`. | [Documentation](https://github.com/tmux/tmux/wiki) |
 | hyperfine | Command timing comparisons when explicitly requested. | `cli_tools` role: `hyperfine`. | [Repository](https://github.com/sharkdp/hyperfine) |
 | FFmpeg / ffprobe | Audio/video processing and machine-readable media metadata. | `cli_tools` role: `ffmpeg`. | [Documentation](https://ffmpeg.org/documentation.html) |
-| Playwright MCP | On-demand headless Chromium automation when explicitly requested. | Codex launcher with a digest-pinned multi-architecture Docker image. | [Repository](https://github.com/microsoft/playwright-mcp) |
 | Context7 MCP | Version-specific library and framework documentation when applicable. | Codex's remote Streamable HTTP MCP configuration, no local package. | [Repository](https://github.com/upstash/context7) |
 | Serena MCP | Symbol/reference navigation for codebases. | Pinned `uvx` package; enabled. | [Repository](https://github.com/oraios/serena) |
 | Chrome DevTools MCP | Chrome tracing, network and memory analysis. | Pinned `npx` package; disabled until needed. | [Repository](https://github.com/ChromeDevTools/chrome-devtools-mcp) |
@@ -49,11 +51,10 @@ This inventory shows what each tool contributes and how Workstation provisions i
 - Ubuntu names the bat and fd binaries `batcat` and `fdfind`. The `cli_tools` role provides `bat` and `fd` symlinks in `~/.local/bin`.
 - The managed Git configuration uses `gh` as the credential helper for GitHub and Gist. Authentication state is not stored in this repository.
 - Docker group membership grants root-equivalent access to the Docker host.
-- Codex launches Playwright MCP over stdio through the managed Docker launcher; no separately started HTTP server is required. See the [Codex notes](codex.md).
 
 ## Ownership and use
 
-Task-specific skills are managed independently; Workstation does not install or link them.
+Engineering skills are managed separately. Workstation provisions tools and agent settings; it does not install, copy or link personal/shared skills.
 
 APT manages Ubuntu CLI packages; mise pins shared runtimes and standalone tools. Project manifests and lockfiles own project dependencies and validation rules. Tool installation does not grant permission to run checks: the managed AGENTS.md requires an explicit request for tests, formatting, linting, builds, browser verification and benchmarks.
 

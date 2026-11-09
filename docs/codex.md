@@ -19,11 +19,10 @@ The role installs a missing CLI but does not upgrade or downgrade an existing ex
 > machine containing sensitive data without reviewing the sandbox and approval
 > policy first.
 
-- `config.toml` is installed as `~/.codex/config.toml`, with marketplace source and revision rendered from the role defaults.
+- `config.toml` is rendered into `~/.codex/config.toml`, with the managed Chrome executable path and pinned marketplace registration.
 - `AGENTS.md` is copied to `~/.codex/AGENTS.md`.
 - Command rules are copied to `~/.codex/rules/default.rules`.
 - Credentials and authentication state remain outside the repository.
-- Codex starts Playwright MCP over stdio using `~/.local/bin/workstation-playwright`; the launcher runs the pinned upstream Docker image on demand.
 - Context7 uses the remote Streamable HTTP endpoint for version-specific, public library documentation; it requires no additional local server. A free API key can increase rate limits but is not stored in this repository.
 - Only query Context7 for relevant library/framework API facts; confirm installed versions in the current project first and prioritize official sources where results disagree.
 - Serena is enabled for semantic navigation; Chrome DevTools, Grafana and PostgreSQL are configured as opt-in MCPs. Credentials are not stored here. See [MCP integrations](mcp.md).
@@ -58,11 +57,7 @@ The remote endpoint is usable without storing credentials in Git. Anonymous acce
 
 ## Browser runtime
 
-The Codex role installs the launcher and creates `~/.local/share/playwright-mcp` for screenshots and other artifacts. Each invocation creates a private `run-*` directory and prints its host path to stderr. The image digest is maintained once in the role defaults and pins the upstream v0.0.83 multi-architecture manifest. First use downloads the image; later sessions reuse the local image. Docker access must already work for the workstation user, including refreshed group membership after installing native Docker. Docker Desktop WSL integration can supply the same Docker CLI when the native Docker role is skipped.
-
-The container uses headless Chromium, an isolated browser session and the host network so applications running in the same Ubuntu/WSL environment remain reachable through localhost. Only the artifact directory is mounted, with the invoking user's UID/GID; projects and credentials are not mounted. Host files needed for a browser upload must be deliberately placed in that artifact directory first. Browser state is disposable while exported artifacts remain on the host.
-
-No persistent HTTP listener on port 8931 or additional systemd service is needed. Connecting the tool does not authorize browser verification: use it only when the user explicitly asks under the managed development policy.
+The `agent_tools` role provides the native agent-browser CLI and managed Chrome for task-scoped browser work. See [browser automation](agent-environment.md#browser-automation) for session ownership and cleanup. Application repositories own any Playwright Test dependency, browser versions and CI setup they require; Workstation does not provision a Playwright MCP server or a shared E2E test runner.
 
 ## Development policy
 

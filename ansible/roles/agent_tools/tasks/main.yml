@@ -9,6 +9,16 @@
   when: agent_tools_browser_enabled | bool
   tags: [agent_browser]
 
+- name: Configure native website auditing
+  ansible.builtin.import_tasks: lighthouse.yml
+  when: agent_tools_lighthouse_enabled | bool
+  tags: [lighthouse]
+
+- name: Configure native site crawling
+  ansible.builtin.import_tasks: siteone.yml
+  when: agent_tools_siteone_enabled | bool
+  tags: [siteone]
+
 - name: Ensure document converter directories exist
   become: false
   ansible.builtin.file:

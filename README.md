@@ -21,6 +21,25 @@ Run project code, dependencies and coding agents inside a dedicated Ubuntu VM. C
 
 - **Ubuntu development setup.** Ansible configures the shell, Git, language runtimes, Docker, Codex and MCP integrations. Browser sessions are scoped to each task and cleaned up afterward.
 - **Optional Windows tooling.** `wvm` creates and manages Hyper-V guests from reusable Packer images. It also configures host apps and provides read-only diagnostics through `wvm doctor`.
+- **Website audits.** The official Lighthouse CLI reuses managed Chrome; native SiteOne adds bounded site crawling. [Installation](docs/agent-environment.md#website-audits) needs no application dependency or separate audit checkout; both tools produce native HTML/JSON reports.
+
+## Included tooling
+
+The default Ubuntu setup provides these tools; project manifests and lockfiles still own application dependencies.
+
+| Area | Tools | Purpose |
+| --- | --- | --- |
+| Shell | Zsh, Starship, fzf, zoxide, tmux | Navigation, completion and persistent terminal sessions. |
+| Runtimes | mise; Node.js, Python, Go, Bun, PHP; uv, Composer | Managed runtimes and dependency tooling. |
+| Git and CLI | Git, GitHub CLI, Delta, jq, yq, btop | Repository work, structured data and VM monitoring. |
+| Containers | Docker Engine, Compose, Buildx | Run application stacks and build images. |
+| Coding agent | Codex CLI | Managed agent configuration, instructions and command rules. |
+| Code discovery | Graphify, ripgrep, fd, ast-grep | Local repository indexing, text and structural search. |
+| Browser automation | agent-browser, managed Chrome | Task-scoped browser automation; native Chrome on x86_64. |
+| Website audits | Lighthouse, SiteOne Crawler | Page measurements and bounded site-wide crawling. |
+| Agent integrations | Serena, Context7 | Code navigation and current library documentation. |
+
+MarkItDown conversion and the Chrome DevTools, Grafana and PostgreSQL MCP integrations are opt-in. See the [full tool inventory](docs/tools.md) for installation details and the [agent environment guide](docs/agent-environment.md) for usage. Installed tools do not start audits or grant permission to run checks.
 
 ## Quick start
 

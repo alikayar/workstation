@@ -104,3 +104,22 @@ For automated semantic document ingestion, run `workstation-graphify index --doc
 `update --structure-only` explicitly drops semantic coverage and automatic docs selection. Manual import through `index --semantic /path/to/cache/extraction.json` remains available; source paths must belong to the included corpus and semantic provenance is stamped. Manual fragments require explicit regeneration when their contributing sources change. No Graphify Cloud upload or separate Graphify model provider is configured.
 
 Repository indexing and queries are task-scoped discovery, not application validation. Tool availability grants no permission for tests, builds, browser work, additional model providers, publication or Git actions. Follow the active repository’s instructions and source scope; a small known change can use direct search without building any graph.
+
+## Website audits
+
+The `agent_tools` role installs Lighthouse 13.6.0 on supported browser hosts (`agent_tools_lighthouse_enabled` follows `agent_tools_browser_enabled` by default). The official npm package lives in a versioned Workstation tool directory. Its `lighthouse` entry point selects the installed workstation Node and managed Chrome; application manifests/runtimes stay unchanged. The five-line launcher only supplies executable paths, including Lighthouse's native `CHROME_PATH` internally. No user env export, custom collector or Docker image is needed.
+
+The same role installs SiteOne Crawler 2.5.1 from checksum-pinned upstream static Linux archives for x64 and ARM64. A direct `siteone-crawler` symlink selects its versioned user-local installation, retaining the upstream license. It has no wrapper, service, database, additional AI provider or application dependency. HTTP crawling works without Chrome; optional rendering needs an explicitly selected existing browser and browser authorization. `--tags siteone` installs only the crawler. Installation does not start a crawl, and the CLI's native AI/upload/browser-download features are not configured or enabled by Workstation.
+
+A full apply installs managed Chrome before Lighthouse. On an existing prepared VM, install the audit tools:
+
+```sh
+ansible-playbook ansible/site.yml --tags lighthouse,siteone
+lighthouse --version
+```
+
+If managed Chrome is absent, apply `--tags agent_browser,lighthouse` with the normal become authorization. This reuses the existing browser libraries/AppArmor policy; it does not disable Chrome sandboxing. Installation starts no browser or service.
+
+Use native JSON/HTML reports, plus Lighthouse `--save-assets` for traces/devtools logs. `lighthouse --help`, `siteone-crawler --help`, the [Lighthouse CLI documentation](https://github.com/GoogleChrome/lighthouse#using-the-node-cli) and [SiteOne documentation](https://github.com/janreges/siteone-crawler/tree/v2.5.1) define their interfaces. Keep reports under the consuming project's ignored-results policy or a private temporary directory. Browser execution, application startup and repeated measurements require their applicable task authorization.
+
+Workstation installs the tools independently of agent skills. Audit workflows and interpretation guidance belong to separately managed skills or the consuming project; provisioning does not inspect or modify those sources.

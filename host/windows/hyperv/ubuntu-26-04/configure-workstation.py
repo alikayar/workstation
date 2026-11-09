@@ -18,12 +18,14 @@ def unpack(bundle, destination):
     with zipfile.ZipFile(bundle) as archive:
         for entry in archive.infolist():
             name = PurePosixPath(entry.filename)
-            if (name.is_absolute() or ".." in name.parts or "\\" in entry.filename
+            if (not name.parts or name.is_absolute() or ".." in name.parts or "\\" in entry.filename
                     or stat.S_ISLNK(entry.external_attr >> 16)):
                 raise RuntimeError("Unsafe source archive entry")
             if not (entry.filename in ("ansible.cfg", "configure-workstation.py")
                     or name.parts[0] in ("ansible", "dotfiles")):
                 raise RuntimeError("Unexpected source archive entry")
+            if name == PurePosixPath("ansible/host_vars/localhost.yml"):
+                raise RuntimeError("Local host variables must not be bundled")
             target = destination.joinpath(*name.parts)
             if entry.is_dir():
                 target.mkdir(parents=True, exist_ok=True)

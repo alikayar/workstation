@@ -60,7 +60,7 @@
     # Codex persists marketplace identity here; copying only the base config
     # erases it and makes the next plugin add report a conflicting source.
     content: |
-      {{ lookup('file', codex_config_src) }}
+      {{ lookup('template', codex_config_src) }}
 
       [marketplaces.drawio]
       source_type = "git"
@@ -70,6 +70,7 @@
     owner: "{{ workstation_user }}"
     group: "{{ workstation_user }}"
     mode: '0600'
+  tags: [codex_config]
 
 - name: Install the Codex global instructions
   become: false
@@ -89,23 +90,11 @@
     group: "{{ workstation_user }}"
     mode: '0644'
 
-- name: Ensure the Playwright artifact directory exists
+- name: Remove the retired Workstation browser launcher
   become: false
   ansible.builtin.file:
-    path: "{{ codex_playwright_output_dir }}"
-    state: directory
-    owner: "{{ workstation_user }}"
-    group: "{{ workstation_user }}"
-    mode: '0700'
-
-- name: Install the on-demand Playwright MCP launcher
-  become: false
-  ansible.builtin.template:
-    src: playwright-mcp.sh.j2
-    dest: "{{ workstation_home }}/.local/bin/workstation-playwright"
-    owner: "{{ workstation_user }}"
-    group: "{{ workstation_user }}"
-    mode: '0755'
+    path: "{{ workstation_home }}/.local/bin/workstation-playwright"
+    state: absent
 
 - name: Configure user-level Codex plugins
   ansible.builtin.import_tasks: plugins.yml
