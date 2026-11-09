@@ -1,13 +1,48 @@
 name: CI
 
 on:
+  pull_request:
+    paths: ['ansible/**', 'dotfiles/**', 'tests/**', 'docs/**', 'README.md', 'AGENTS.md', 'ansible.cfg', '.github/**']
+  push:
+    branches: [main]
+    paths: ['ansible/**', 'dotfiles/**', 'tests/**', 'docs/**', 'README.md', 'AGENTS.md', 'ansible.cfg', '.github/**']
   workflow_dispatch:
+    inputs:
+      browser:
+        description: Run loopback browser smoke checks after Ubuntu provisioning
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install source-check prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ansible-core ansible-lint python3-debian
+      - name: Check Ansible sources
+        run: |
+          /usr/bin/ansible-playbook ansible/site.yml --syntax-check
+          /usr/bin/ansible-lint ansible/site.yml
+      - name: Check regression script syntax
+        run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          for path in Path('tests').glob('*.py'):
+              compile(path.read_bytes(), str(path), 'exec')
+          PYTHON
+
   ansible:
+    if: github.event_name == 'workflow_dispatch'
+    needs: checks
     strategy:
       fail-fast: false
       matrix:
@@ -47,7 +82,38 @@ jobs:
           ansible-playbook ansible/site.yml | tee "${RUNNER_TEMP}/workstation-second-run.log"
           grep -Eq '^localhost[[:space:]]*:[[:space:]]+ok=[0-9]+[[:space:]]+changed=0([[:space:]]|$)' "${RUNNER_TEMP}/workstation-second-run.log"
 
+      - name: Exercise isolated installation regressions
+        run: '"$HOME/.local/bin/mise" exec -- python3 tests/regressions.py --installed-tools --output "${RUNNER_TEMP}/regressions"'
+      - name: Exercise loopback browser workflow
+        if: inputs.browser
+        run: '"$HOME/.local/bin/mise" exec -- python3 tests/browser_smoke.py --output "${RUNNER_TEMP}/browser-smoke"'
+      - name: Retain verification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verification-${{ matrix.os }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/workstation-second-run.log
+            ${{ runner.temp }}/regressions/result.json
+            ${{ runner.temp }}/regressions/**/apply-*.log
+            ${{ runner.temp }}/browser-smoke/*.json
+            ${{ runner.temp }}/browser-smoke/*.html
+            ${{ runner.temp }}/browser-smoke/*.png
+            ${{ runner.temp }}/browser-smoke/*.log
+      - name: Publish verification summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Ubuntu verification: ${{ matrix.os }}"
+            echo 'Source checks, full provisioning, second-apply idempotency and isolated regressions are separate steps above.'
+            echo 'Browser smoke runs only when selected. This job does not verify Windows, WSL or ARM64.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   windows-powershell:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 10
     strategy:

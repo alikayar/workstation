@@ -84,8 +84,8 @@ If prompted to enable Hyper-V, restart Windows and rerun the create command. The
 
 | Area | Coverage |
 | --- | --- |
-| **Ubuntu provisioning** | The [CI workflow](.github/workflows/ci.yml) is configured to check syntax and lint, apply Ansible on Ubuntu 24.04 and 26.04, and require zero changes on a second apply. |
-| **Windows scripts** | CI parses scripts with Windows PowerShell 5.1 and PowerShell 7. The [Windows validation notes](docs/windows.md#recovery-compatibility-and-validation) describe live Hyper-V checks and remaining coverage. |
+| **Ubuntu provisioning** | Relevant PRs/pushes run source checks. A manual [CI run](.github/workflows/ci.yml) provisions Ubuntu 24.04/26.04, checks second-apply idempotency and isolated regressions; browser smoke is opt-in. See [coverage and evidence](docs/verification.md). |
+| **Windows scripts** | The manual CI run parses scripts with Windows PowerShell 5.1 and PowerShell 7. The [Windows validation notes](docs/windows.md#recovery-compatibility-and-validation) describe live Hyper-V checks and remaining coverage. |
 | **Other Ubuntu environments** | The [Ubuntu guide](docs/getting-started.md) covers WSL 2 and architecture differences. The full CI install runs on x86_64. |
 
 ## Isolation boundaries
@@ -95,7 +95,8 @@ Use a fresh VM for unfamiliar code. Keep work credentials, shared host folders a
 ## Documentation
 
 - [Host connections and application previews](docs/host.md)
-- [Ubuntu provisioning and troubleshooting](docs/getting-started.md)
+- [Ubuntu setup, updates and recovery](docs/getting-started.md)
+- [Verification levels and CI evidence](docs/verification.md)
 - [Windows setup, Hyper-V, and `wvm`](docs/windows.md)
 - [Agent environment and browser automation](docs/agent-environment.md)
 - [Codex configuration](docs/codex.md) and [MCP integrations](docs/mcp.md)
