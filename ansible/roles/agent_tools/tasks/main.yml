@@ -1,4 +1,9 @@
 ---
+- name: Configure local repository knowledge indexing
+  ansible.builtin.import_tasks: graphify.yml
+  when: agent_tools_graphify_enabled | bool
+  tags: [graphify]
+
 - name: Configure task-scoped browser automation
   ansible.builtin.import_tasks: agent-browser.yml
   when: agent_tools_browser_enabled | bool

@@ -5,7 +5,6 @@ MCP configuration lives in `dotfiles/codex/config.toml` and is installed as `~/.
 | MCP | Default | Intended use | Prerequisites |
 | --- | --- | --- | --- |
 | Playwright | Enabled | Browser interaction and screenshots | Docker with the existing pinned Chromium image |
-| draw.io | Enabled | Diagram references, shape lookup and opening editable diagrams | `npx`; official `@drawio/mcp@1.10.1` package |
 | Context7 | Enabled | Public, version-specific library documentation | Internet; API key not necessary for anonymous access |
 | Serena | Enabled | Symbol and reference navigation | `uvx`; a Git checkout; applicable language servers |
 | Chrome DevTools | Disabled | Performance traces, network and browser debugging | `npx` and Chrome installed **inside Ubuntu** |
@@ -31,13 +30,11 @@ For authorized VM-local web verification, the `agent_tools` role also provides t
 
 The managed default is `gpt-6.1-sol` with `medium` reasoning and low verbosity. The [model documentation](https://developers.openai.com/api/docs/models/gpt-6.1-sol) confirms that reasoning level is supported. This sets the VM configuration default; desktop model selection and existing conversations may override it. No context-window override is needed.
 
-Global preferences live in `dotfiles/codex/AGENTS.md`; this repository's `AGENTS.md` explains workstation ownership and onboarding. Command safeguards live in `dotfiles/codex/rules/default.rules`. Keep these layers separate and load specialist skills only for the relevant task. See the official [AGENTS.md guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and [command rules](https://learn.chatgpt.com/docs/agent-configuration/rules).
+Global preferences live in `dotfiles/codex/AGENTS.md`; this repository's `AGENTS.md` explains workstation ownership and onboarding. Command safeguards live in `dotfiles/codex/rules/default.rules`. Keep these layers separate; repository instructions and the relevant Workstation tool guides provide the execution workflow. See the official [AGENTS.md guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and [command rules](https://learn.chatgpt.com/docs/agent-configuration/rules).
 
-## draw.io
+## draw.io skill plugin
 
-The official `@drawio/mcp@1.10.1` Tool Server runs locally over stdio through `npx`. It provides XML/Mermaid references, shape lookup, page operations and tools that open diagrams in the browser editor. It is separate from the installed `drawio@drawio` skill plugin; both are enabled. No API key or Desktop installation is needed for the MCP server. Desktop image export remains a separate capability.
-
-Start a new Codex session after adding the server. The current conversation does not automatically gain newly configured MCP tools. Keep editable sources in the project and apply its diagram style rules.
+The separate `drawio@drawio` skill plugin remains enabled for authoring diagram files. The draw.io MCP server is not installed or configured: the reviewed `@drawio/mcp@1.10.1` release downloads mutable CDN JavaScript and evaluates it without a pinned hash or signature. MCP shape lookup, routing and layout tools are unavailable. Keep editable sources in the project and apply its diagram style rules.
 
 The full `codex` role manages the marketplace source and revision in the configuration; it refuses to update an existing marketplace checkout at a different revision. A plugin-only apply can report `already added from a different source` when another source is registered. After authorizing replacement, run `codex plugin marketplace remove drawio --json`, then reapply the `codex` role to register the source and revision pinned in its defaults. The `marketplace list` command can omit a conflicting registration, so an empty list is not proof that registration is absent. Do not delete the plugin cache to resolve this error.
 

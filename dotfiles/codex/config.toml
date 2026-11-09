@@ -19,13 +19,6 @@ enabled = true
 [plugins."drawio@drawio"]
 enabled = true
 
-[mcp_servers.drawio]
-command = "npx"
-args = ["-y", "@drawio/mcp@1.10.1"]
-enabled = true
-startup_timeout_sec = 120
-required = false
-
 # Hosted, documentation-only MCP; no extra runtime, process or secret in git.
 # Unauthenticated requests may have lower rate limits.
 [mcp_servers.context7]

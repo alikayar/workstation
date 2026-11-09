@@ -5,6 +5,7 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | Tool | Role in workstation | Provisioning | Reference |
 | --- | --- | --- | --- |
 | Ansible (`ansible-playbook`) | Apply the workstation configuration. | Prerequisite: `ansible-core`. | [Documentation](https://docs.ansible.com/ansible/latest/) |
+| Graphify (`workstation-graphify`) | Local graph discovery with separate checkout caches and optional Codex semantic docs extraction. | `agent_tools` role: pinned isolated Graphify and mise Python; no application dependencies or upstream skill installation. | [Local workflow](agent-environment.md#repository-knowledge-indexing) |
 | Zsh | Interactive shell with managed history, completion, and aliases. | `shell` role: `zsh`. | [Documentation](https://zsh.sourceforge.io/Doc/) |
 | Starship | Prompt for the managed Zsh environment. | `shell` role: pinned release binary. | [Documentation](https://starship.rs/config/) |
 | zsh-autosuggestions | Suggest commands while typing. | `shell` role: Ubuntu package. | [Repository](https://github.com/zsh-users/zsh-autosuggestions) |

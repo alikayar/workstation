@@ -1,0 +1,4 @@
+#!/bin/sh
+# Workstation managed Graphify launcher v1
+# Use the pinned environment, not the active application's Python or upstream bootstrap.
+exec {{ (agent_tools_graphify_dir ~ '/tools/graphifyy/bin/python') | quote }} {{ (agent_tools_graphify_dir ~ '/workstation-graphify.py') | quote }} "$@"

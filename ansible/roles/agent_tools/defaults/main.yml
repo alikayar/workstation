@@ -1,4 +1,10 @@
 ---
+# One workstation tool; applications keep their own dependencies unchanged.
+agent_tools_graphify_enabled: true
+agent_tools_graphify_version: '0.9.103'
+agent_tools_graphify_python_version: '3.12.15'
+agent_tools_graphify_dir: "{{ workstation_home }}/.local/share/workstation/graphify-{{ agent_tools_graphify_version }}-py{{ agent_tools_graphify_python_version }}"
+
 # Document conversion is optional.
 agent_tools_markitdown_enabled: false
 agent_tools_markitdown_version: '0.1.9'
