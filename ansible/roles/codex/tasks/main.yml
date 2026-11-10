@@ -60,7 +60,7 @@
     # Codex persists marketplace identity here; copying only the base config
     # erases it and makes the next plugin add report a conflicting source.
     content: |
-      {{ lookup('template', codex_config_src) }}
+      {{ lookup('template', codex_config_src) | trim }}
 
       [marketplaces.drawio]
       source_type = "git"

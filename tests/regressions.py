@@ -155,6 +155,27 @@ class Regressions(unittest.TestCase):
         self.assertNotIn('playwright', data['mcp_servers'])
 
     @unittest.skipUnless(OPTIONS.installed_tools, 'requires --installed-tools on a prepared VM')
+    def test_codex_plugin_configuration_idempotency(self):
+        codex = shutil.which('codex')
+        self.assertIsNotNone(codex, 'Install Codex before exercising plugin configuration')
+        config = self.home / '.codex'
+        config.mkdir(mode=0o700)
+        wrapper = self.base / 'isolated-codex'
+        wrapper.write_text(f'#!{sys.executable}\nimport os,sys\n'
+                           f'os.environ["HOME"] = {str(self.home)!r}\n'
+                           f'os.environ["CODEX_HOME"] = {str(config)!r}\n'
+                           f'os.execv({codex!r}, [{codex!r}, *sys.argv[1:]])\n')
+        wrapper.chmod(0o755)
+        values = {'codex_binary': str(wrapper), 'codex_config_dir': str(config),
+                  'codex_config_src': str(ROOT / 'dotfiles/codex/config.toml')}
+        self.apply('codex', values, tags='codex_config')
+        expected = (config / 'config.toml').read_bytes()
+        self.apply('codex', values, tasks_from='plugins')
+        self.assertEqual((config / 'config.toml').read_bytes(), expected)
+        self.apply('codex', values, tags='codex_config', unchanged=True)
+        self.apply('codex', values, tasks_from='plugins', unchanged=True)
+
+    @unittest.skipUnless(OPTIONS.installed_tools, 'requires --installed-tools on a prepared VM')
     def test_siteone_recovery_and_custom_directory(self):
         # The real pinned archive from provisioning is reused without copying user configuration.
         cache = Path.home() / '.local/share/workstation'
