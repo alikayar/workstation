@@ -1,0 +1,40 @@
+---
+- name: Inspect former Workstation aliases and yq without following links
+  become: false
+  ansible.builtin.stat:
+    path: "{{ workstation_home }}/.local/bin/{{ item }}"
+    follow: false
+    get_checksum: true
+    checksum_algorithm: sha256
+    get_mime: false
+    get_attributes: false
+  loop: [bat, fd, yq]
+  register: cli_tools_legacy_launchers
+
+- name: Preserve unrelated user binaries and links
+  ansible.builtin.assert:
+    that:
+      - >-
+        not item.stat.exists or
+        (item.item in ['bat', 'fd'] and
+        (item.stat.islnk | default(false)) and
+        (item.stat.lnk_target | default('')) ==
+        ('/usr/bin/batcat' if item.item == 'bat' else '/usr/bin/fdfind')) or
+        (item.item == 'yq' and
+        (item.stat.isreg | default(false)) and
+        not (item.stat.islnk | default(false)) and
+        (item.stat.checksum | default('')) in cli_tools_legacy_yq_checksums)
+    fail_msg: "Existing {{ item.item }} retained; review its ownership before retiring the former Workstation install."
+  loop: "{{ cli_tools_legacy_launchers.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Remove only positively identified former Workstation launchers
+  become: false
+  ansible.builtin.file:
+    path: "{{ workstation_home }}/.local/bin/{{ item.item }}"
+    state: absent
+  loop: "{{ cli_tools_legacy_launchers.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists

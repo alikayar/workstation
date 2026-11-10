@@ -1,19 +1,15 @@
 ---
 cli_tools_packages:
-  - bat
   - btop
   - eza
-  - fd-find
-  - gh
-  - git-delta
   - jq
-  - ripgrep
-  - shellcheck
   - ffmpeg
   - tmux
-  - hyperfine
 
-cli_tools_yq_version: "4.53.6"
-cli_tools_yq_checksums:
-  amd64: "c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385"
-  arm64: "88a1016bc1d657375a35864e4f44b6f333df8ff97b559f51bba0adcb2169df09"
+cli_tools_mise_commands: [yq, bat, fd, gh, rg, delta, shellcheck, hyperfine]
+cli_tools_legacy_packages: [bat, fd-find, gh, ripgrep, git-delta, shellcheck, hyperfine]
+
+# Recognize the former Workstation yq binary without deleting unrelated installations.
+cli_tools_legacy_yq_checksums:
+  - c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385
+  - 88a1016bc1d657375a35864e4f44b6f333df8ff97b559f51bba0adcb2169df09
