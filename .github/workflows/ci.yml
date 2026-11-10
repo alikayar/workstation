@@ -28,6 +28,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes ansible-core ansible-lint python3-debian
+          echo /usr/bin >> "$GITHUB_PATH"
       - name: Check Ansible sources
         run: |
           /usr/bin/ansible-playbook ansible/site.yml --syntax-check
