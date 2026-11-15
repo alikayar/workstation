@@ -1,0 +1,76 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "enabledManagers": [
+    "custom.regex",
+    "github-actions"
+  ],
+  "automerge": false,
+  "dependencyDashboard": true,
+  "timezone": "Europe/Istanbul",
+  "schedule": [
+    "before 10am on monday"
+  ],
+  "minimumReleaseAge": "7 days",
+  "ignoreUnstable": true,
+  "prConcurrentLimit": 3,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Read annotated version pins without parsing the Jinja mise template as TOML.",
+      "managerFilePatterns": [
+        "/^dotfiles/mise/config\\.toml$/",
+        "/^ansible/roles/agent_tools/defaults/main\\.yml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[\\w-]+) depName=(?<depName>[\\w./-]+) versioning=(?<versioning>[\\w-]+)(?: extractVersion=(?<extractVersion>[^\\r\\n]+))?\\r?\\n[ \\t]*(?:\"[^\"\\r\\n]+\"|[A-Za-z_][A-Za-z0-9_]*)[ \\t]*[:=][ \\t]*[\"\\x27](?<currentValue>[^\"\\x27\\r\\n]+)[\"\\x27]"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned Python MCP packages in the VM Codex template.",
+      "managerFilePatterns": [
+        "/^dotfiles/codex/config\\.toml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>mcp-grafana|postgres-mcp)==(?<currentValue>[0-9][0-9A-Za-z.+-]*)"
+      ],
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned Chrome DevTools MCP npm package in the VM Codex template.",
+      "managerFilePatterns": [
+        "/^dotfiles/codex/config\\.toml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>chrome-devtools-mcp)@(?<currentValue>[0-9][0-9A-Za-z.+-]*)"
+      ],
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Node releases must reach LTS before a new major is proposed.",
+      "matchDatasources": [
+        "node-version"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
+      "versioning": "node",
+      "ignoreUnstable": true
+    },
+    {
+      "description": "Preserve immutable GitHub Actions references.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "pinDigests": true
+    }
+  ]
+}

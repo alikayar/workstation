@@ -1,33 +1,53 @@
 [tools]
 {% if 'node' in workstation_languages %}
+# renovate: datasource=node-version depName=node versioning=node
 node = "26.13.0"
 {% endif %}
 {% if 'python' in workstation_languages %}
+# renovate: datasource=python-version depName=python versioning=python
 python = "3.15.2"
 {% endif %}
 {% if 'go' in workstation_languages %}
+# renovate: datasource=golang-version depName=go versioning=semver
 go = "1.27.3"
 {% endif %}
 {% if 'bun' in workstation_languages %}
+# renovate: datasource=github-releases depName=oven-sh/bun versioning=semver extractVersion=^bun-v(?<version>\d+\.\d+\.\d+)$
 bun = "1.4.4"
 {% endif %}
 {% if 'php' in workstation_languages %}
+# renovate: datasource=github-tags depName=php/php-src versioning=semver extractVersion=^php-(?<version>\d+\.\d+\.\d+)$
 php = "8.5.12"
 {% endif %}
 
 # Shared CLI defaults; project-local versions and lockfiles take precedence.
+# renovate: datasource=github-releases depName=astral-sh/uv versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 uv = "0.13.6"
+# renovate: datasource=github-releases depName=astral-sh/ruff versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 ruff = "0.17.3"
+# renovate: datasource=github-releases depName=ast-grep/ast-grep versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "ast-grep" = "0.51.1"
+# renovate: datasource=github-releases depName=rhysd/actionlint versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 actionlint = "1.7.12"
+# renovate: datasource=github-releases depName=junegunn/fzf versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 fzf = "0.74.5"
+# renovate: datasource=github-releases depName=ajeetdsouza/zoxide versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 zoxide = "0.10.0"
+# renovate: datasource=github-releases depName=bitwarden/sdk-sm versioning=semver extractVersion=^bws-v(?<version>\d+\.\d+\.\d+)$
 "aqua:bitwarden/sdk-sm" = "2.1.0"
+# renovate: datasource=github-releases depName=mikefarah/yq versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:mikefarah/yq" = "4.53.6"
+# renovate: datasource=github-releases depName=sharkdp/bat versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:sharkdp/bat" = "0.26.1"
+# renovate: datasource=github-releases depName=sharkdp/fd versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:sharkdp/fd" = "10.5.2"
+# renovate: datasource=github-releases depName=cli/cli versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:cli/cli" = "2.103.3"
+# renovate: datasource=github-releases depName=BurntSushi/ripgrep versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:BurntSushi/ripgrep" = "15.2.0"
+# renovate: datasource=github-releases depName=dandavison/delta versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:dandavison/delta" = "0.20.1"
+# renovate: datasource=github-releases depName=koalaman/shellcheck versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:koalaman/shellcheck" = "0.11.0"
+# renovate: datasource=github-releases depName=sharkdp/hyperfine versioning=semver extractVersion=^v?(?<version>\d+\.\d+\.\d+)$
 "aqua:sharkdp/hyperfine" = "2.0.0"

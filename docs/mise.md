@@ -39,3 +39,15 @@ The tag includes the mise role and therefore installs all missing tools in the r
 Composer resolves through the mise shim. This baseline does not migrate older standalone launchers or remove distribution packages. Ubuntu PHP extensions and `/etc/php` settings do not configure mise's PHP. Project dependencies remain local: run `composer install` in the project's Composer directory.
 
 The PHP backend sets `COMPOSER_HOME` inside the selected PHP installation. Existing global Composer packages and settings are not automatically migrated; project lockfiles remain authoritative.
+
+## Dependency update proposals
+
+[renovate.json](../renovate.json) configures the hosted Renovate GitHub App. After this configuration is merged, install or configure [Renovate](https://github.com/apps/renovate) for `alikayar/workstation` only and complete its onboarding if offered. No workstation service, repository token or self-hosted workflow is required. The repository file alone does not grant the app access or start the bot.
+
+The bot proposes updates on Monday before 10:00 in Europe/Istanbul, with at most three active update PRs and no automatic merges. Releases with timestamps wait seven days; prereleases are excluded. Node uses Renovate's LTS-aware `node` versioning, so a new major is proposed after that line reaches LTS. Go and the other tracked tools follow stable releases. Exact pins remain in the source; merging a PR does not provision an existing VM.
+
+The mise configuration contains Jinja conditionals, so Renovate uses explicit `# renovate:` annotations instead of the TOML manager. Coverage includes all language/runtime and shared CLI pins in that template, Graphify/MarkItDown/Lighthouse package versions, Python/npm MCP package versions and digest-pinned GitHub Actions. Keep annotations immediately above the version assignment. Bun, PHP and Bitwarden use explicit tag-prefix extraction so vendor tag prefixes are not written into mise's version values.
+
+Checksum-coupled downloads (mise installer, Composer, Starship, browser engines, SiteOne, Packer and installation media), the pinned Graphify Python compatibility runtime, reviewed Codex installer/plugin revisions and bundled theme/icon snapshots remain deliberate manual updates. Do not add a version-only rule for those downloads: version, URL, checksum and any matching recipe must change together. Review update diffs and use the [verification guide](verification.md); automatic source checks do not establish full-install or Windows compatibility.
+
+See Renovate's [regex manager](https://docs.renovatebot.com/modules/manager/regex/) and [Node versioning](https://docs.renovatebot.com/modules/versioning/node/) documentation for extraction and LTS behavior.

@@ -1,6 +1,7 @@
 ---
 # One workstation tool; applications keep their own dependencies unchanged.
 agent_tools_graphify_enabled: true
+# renovate: datasource=pypi depName=graphifyy versioning=pep440
 agent_tools_graphify_version: '0.9.103'
 agent_tools_graphify_python_version: '3.12.15'
 agent_tools_graphify_dir: >-
@@ -9,6 +10,7 @@ agent_tools_graphify_dir: >-
 
 # Document conversion is optional.
 agent_tools_markitdown_enabled: false
+# renovate: datasource=pypi depName=markitdown versioning=pep440
 agent_tools_markitdown_version: '0.1.9'
 agent_tools_markitdown_dir: "{{ workstation_home }}/.local/share/workstation/markitdown-{{ agent_tools_markitdown_version }}"
 
@@ -29,6 +31,7 @@ agent_tools_browser_idle_timeout: '5m'
 
 # Native Lighthouse CLI reuses the managed Chrome installation.
 agent_tools_lighthouse_enabled: "{{ agent_tools_browser_enabled }}"
+# renovate: datasource=npm depName=lighthouse versioning=semver
 agent_tools_lighthouse_version: '13.6.0'
 agent_tools_lighthouse_dir: "{{ workstation_home }}/.local/share/workstation/lighthouse-{{ agent_tools_lighthouse_version }}"
 
