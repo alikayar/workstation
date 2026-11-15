@@ -16,19 +16,19 @@ Workstation provides executables, version defaults, launchers and their usage gu
 - The Codex role bootstraps a missing CLI through an upstream commit and checksum-pinned installer, but neither pins the resulting CLI release nor upgrades/downgrades an existing executable. The immutable installer URL avoids breaking fresh installs when the public installer endpoint changes. Desktop/CLI updates remain explicit lifecycle decisions; this avoids Ansible fighting the desktop updater. Do not describe the entire environment as bit-for-bit reproducible.
 - Update a tool's pin only after reviewing its release and the behavior used here. Apply the relevant role, run authorized checks, and review project overrides before changing an active version.
 - Optional Python tools live in separate versioned environments. Top-level packages are pinned; transitive dependencies are not locked. Old environments are retained until deliberately removed, since another process may still use them.
-- Agent-browser and Chrome for Testing use explicit version and SHA256 pins. The native CLI has no npm runtime dependency; APT browser libraries follow Ubuntu updates.
+- Agent-browser, Lightpanda and Chrome for Testing use explicit version and SHA256 pins. The native CLI has no npm runtime dependency; APT browser libraries follow Ubuntu updates.
 
 ## Document conversion
 
-Enable MarkItDown with `agent_tools_markitdown_enabled: true` in the ignored local host variables and apply the `agent_tools` role. The existing mise/uv/Python setup must be installed first.
+Enable MarkItDown with `agent_tools_markitdown_enabled: true` in the ignored local host variables and apply `--tags markitdown`. The existing mise/uv/Python setup must be installed first.
 
-Use `workstation-markitdown input.pdf -o output.md`. The launcher points to an isolated uv tool environment under `~/.local/share/workstation/markitdown-0.1.9/`, with only the PDF, DOCX, PPTX and XLSX extras requested. It does not enable third-party converter plugins or configure hosted AI services. Text extraction does not prove layout, OCR or complex table fidelity.
+Use `workstation-markitdown input.pdf -o output.md`. The launcher points to an isolated uv tool environment under `~/.local/share/workstation/markitdown-0.1.9/`, with only the PDF, DOCX, PPTX and XLSX extras requested. Provisioning refuses an existing linked or unmarked launcher. It does not enable third-party converter plugins or configure hosted AI services. Text extraction does not prove layout, OCR or complex table fidelity.
 
 Disabling the setting skips future installation; it does not uninstall an existing environment or launcher.
 
 ## Browser automation
 
-The Ubuntu `agent_tools` role installs **agent-browser 0.41.2** and **Chrome for Testing 157.0.8103.38** by default on x86_64. Both downloads are versioned and SHA256 checked. Version directories under `/opt/workstation` are root-owned. Chrome's completed extraction is recorded only after unpacking; an interrupted extraction is retried. Old versions, artifacts and the verified archive cache are retained.
+The Ubuntu `agent_tools` role installs **agent-browser 0.41.2**, **Lightpanda 1.0.3** and **Chrome for Testing 157.0.8103.38** on x86_64. The managed launcher defaults to Lightpanda. All three downloads are versioned and SHA256 checked. Lightpanda lives in the user-owned `~/.local/share/workstation/lightpanda/1.0.3/` directory; the CLI and Chrome version directories under `/opt/workstation` are root-owned. Chrome's completed extraction is recorded only after unpacking; an interrupted extraction is retried. Old versions, artifacts and the verified archive cache are retained.
 
 Chrome for Testing does not provide a Linux ARM64 download. `agent_tools_browser_enabled` therefore defaults to false on ARM64; explicitly enabling it there stops with an explanation. Other roles retain their ARM64 support. Setting this variable to false skips future installation; it does not uninstall an existing browser.
 
@@ -38,7 +38,17 @@ Full workstation provisioning includes this setup. To apply it separately, run i
 ansible-playbook ansible/site.yml --tags agent_browser,codex --ask-become-pass
 ```
 
-The `agent_browser` tag installs only browser dependencies and launchers. The `codex` tag also applies the existing Codex role, including its managed global instructions and configuration; that role remains their single owner. Applying either role does not authorize or run browser verification or install external skills. Browser setup refuses to replace unrelated or linked `~/.local/bin/agent-browser` and `workstation-browser-task` files. Existing user and project browser configuration is not overwritten; the launcher loads a separate managed config. It clears inherited browser settings and refuses session/profile/restore/CDP/provider, config/executable, headed and idle-timeout overrides. These managed commands intentionally expose a subset of upstream CLI flags: use `agent-browser --session TASK COMMAND [FLAGS ...]`, with formatting flags such as `--json` after the command. `connect` and identity/profile overrides are refused; `wait --state` still controls element visibility. `--help` and `--version` remain available without starting a session. Preview mode skips downloads; it does not verify asset availability or checksum bytes.
+The `agent_browser` tag installs only browser dependencies and launchers. The `codex` tag also applies the existing Codex role, including its managed global instructions and configuration; that role remains their single owner. Applying either role does not authorize or run browser verification or install external skills. Browser setup refuses to replace unrelated or linked `~/.local/bin/agent-browser` and `workstation-browser-task` files. Existing user and project browser configuration is not overwritten; the launcher loads a separate managed config. It clears inherited browser settings and refuses session/profile/restore/CDP/provider, config/executable, headed and idle-timeout overrides. `agent_tools_browser_engine` sets the default engine (`lightpanda` initially); a command may explicitly select `--engine lightpanda` or `--engine chrome`, using only the managed binaries. There is no automatic fallback. Select the engine when opening a new unique session and keep the selection consistent for that session. These managed commands intentionally expose a subset of upstream CLI flags: use `agent-browser --session TASK COMMAND [FLAGS ...]`, with formatting flags such as `--json` after the command. `connect` and identity/profile overrides are refused; `wait --state` still controls element visibility. `--help` and `--version` remain available without starting a session. Preview mode skips downloads; it does not verify asset availability or checksum bytes.
+
+On an already prepared x86_64 VM, install the pinned Lightpanda binary and update only the user-local browser launchers without sudo or changes to Chrome, Codex or other tools:
+
+```sh
+ansible-playbook ansible/site.yml --tags agent_browser_lightpanda
+```
+
+This scope requires the existing managed agent-browser CLI/config. It preserves unrelated launchers using the same ownership guards as the full apply. Applying provisioning starts no browser and does not run verification.
+
+Lightpanda runs JavaScript and exposes DOM extraction through CDP. It does not provide Chrome's visual fidelity; screenshot, PDF and other rendering-dependent operations are not promised by this setup. For authorized visual work, start a fresh task session with `agent-browser open URL --engine chrome` and use that engine consistently. Lighthouse keeps using managed Chrome independently of this default. A change to the default affects new sessions; existing sessions are not stopped or migrated.
 
 ### One foreground workflow
 
@@ -46,7 +56,7 @@ The `agent_browser` tag installs only browser dependencies and launchers. The `c
 workstation-browser-task sh -eu -c '
   agent-browser open http://127.0.0.1:3000
   agent-browser snapshot -i
-  agent-browser screenshot
+  agent-browser get title
 '
 ```
 
@@ -65,19 +75,21 @@ Record the printed ID and pass that literal value on every subsequent command, r
 ```sh
 agent-browser --session TASK_ID open http://127.0.0.1:3000
 agent-browser --session TASK_ID snapshot -i
-agent-browser --session TASK_ID screenshot /absolute/project/artifacts/page.png
+agent-browser --session TASK_ID get title
 agent-browser --session TASK_ID close
 ```
 
 Managed Codex instructions require explicit close at task completion, including failure/cancellation. There is no reliable OS event for the end of an arbitrary agent chat, so this multi-call workflow still requires agent cleanup. Never close all sessions. SIGKILL, power loss and disconnected agents can bypass cleanup; the five-minute native idle timeout is a fallback for local headless sessions. Keep headed, remote-attached and restored personal profiles outside this workflow.
 
-The browser runs inside Ubuntu and reaches the application's VM-local address. Inspect screenshots for layout checks; accessibility snapshots alone do not prove visual correctness. Session separation is not a security boundary against processes running as the same Unix user. Browser execution still needs the user's authorization.
+The browser runs inside Ubuntu and reaches the application's VM-local address. For visual verification, explicitly use Chrome and inspect its screenshots; accessibility snapshots alone do not prove visual correctness. Session separation is not a security boundary against processes running as the same Unix user. Browser execution still needs the user's authorization.
 
 ### Browser security boundary
 
+Lightpanda is a user-owned process in this VM; the Chrome AppArmor namespace rule does not sandbox it. Session isolation is not filesystem or network confinement.
+
 On AppArmor-enabled Ubuntu, a profile permits user namespaces for the exact root-owned Chrome executable, following [Chromium's documented approach](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md). The exact policy is reloaded on each apply so a previously interrupted apply can recover even when its file is unchanged. File changes carry the Ansible change report; the derived kernel reload does not restart the AppArmor service. The role does not disable AppArmor globally, add a SUID executable or pass `--no-sandbox`. This grants namespace use; it is not full filesystem/network confinement. Upstream agent-browser itself disables Chrome sandboxing under root, `CI` and container environments; use the intended non-root native VM and do not treat CI/container launches as sandbox verification.
 
-Upstream: [installation](https://agent-browser.dev/installation), [sessions](https://agent-browser.dev/sessions), [commands](https://agent-browser.dev/commands). The CLI digest comes from upstream v0.41.2 release asset metadata; the Chrome SHA256 was calculated from Google's version-specific archive. Checksums freeze these bytes; they are not vendor signatures.
+Upstream: [installation](https://agent-browser.dev/installation), [sessions](https://agent-browser.dev/sessions), [commands](https://agent-browser.dev/commands). The CLI and Lightpanda digests come from their pinned upstream release asset metadata; the Chrome SHA256 was calculated from Google's version-specific archive. Checksums freeze these bytes; they are not vendor signatures.
 
 ## Repository knowledge indexing
 

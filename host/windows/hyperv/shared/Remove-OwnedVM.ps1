@@ -12,7 +12,6 @@ ISOs are retained. Force permits power-off; it never bypasses reference checks.
 param(
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$VMName,
     [string]$VMRoot,
-    [ValidateSet('Windows','Ubuntu')][string]$Guest,
     [switch]$Force
 )
 $ErrorActionPreference='Stop'
@@ -31,6 +30,7 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
 }
 Import-Module Hyper-V
 . (Join-Path $PSScriptRoot 'BaseImage.ps1')
+. (Join-Path $PSScriptRoot 'VM.ps1')
 
 function Test-DeletionPath([string]$Path,[string]$Directory) {
     if(-not $Path -or -not $Directory){return $false}
@@ -170,10 +170,8 @@ function Assert-VMDeletionReferences($Plan,[object[]]$Inventory) {
     }
 }
 
-$hash=[Security.Cryptography.SHA256]::Create()
-try{$key=[BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($VMName.ToLowerInvariant()))).Replace('-','')}finally{$hash.Dispose()}
-$journalRoot=Join-Path $env:ProgramData 'Workstation\Deletions'
-$journalPath=Join-Path $journalRoot ($key+'.json')
+$journalPath=Get-WVMDeletionJournalPath $VMName
+$journalRoot=Split-Path -Parent $journalPath
 Assert-PackerPath $journalPath
 $locks=@()
 try{

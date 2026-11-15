@@ -31,8 +31,7 @@
         not agent_tools_siteone_existing.stat.exists or
         ((agent_tools_siteone_existing.stat.islnk | default(false)) and
         ((agent_tools_siteone_existing.stat.lnk_source | default('')) == agent_tools_siteone_dir ~ '/siteone-crawler' or
-        (((agent_tools_siteone_previous.matched | default(0)) > 0 or
-        (agent_tools_siteone_existing.stat.lnk_source | default('')).startswith(workstation_home ~ '/.local/share/workstation/siteone-crawler-')) and
+        (((agent_tools_siteone_previous.matched | default(0)) > 0) and
         (agent_tools_siteone_existing.stat.lnk_source | default('')).endswith('/siteone-crawler'))))
     fail_msg: Existing siteone-crawler retained; review its ownership before applying.
 

@@ -1,5 +1,12 @@
 . (Join-Path $PSScriptRoot 'Packer.ps1')
 
+function Get-WVMDeletionJournalPath([string]$VMName) {
+    $hash = [Security.Cryptography.SHA256]::Create()
+    try { $key = [BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($VMName.ToLowerInvariant()))).Replace('-', '') }
+    finally { $hash.Dispose() }
+    return Join-Path (Join-Path $env:ProgramData 'Workstation\Deletions') ($key + '.json')
+}
+
 function Save-WVMRecord([object]$Record) {
     $name = if ($Record.Guest -eq 'Windows') { 'windows-vm.json' } else { 'ubuntu-vm.json' }
     Save-PackerText (Join-Path $Record.Root $name) ($Record | ConvertTo-Json -Depth 16)

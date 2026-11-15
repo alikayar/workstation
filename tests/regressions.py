@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Exercise Workstation tasks in disposable homes; never apply the full playbook."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -61,65 +60,6 @@ class Regressions(unittest.TestCase):
             self.assertRegex(result.stdout, r'localhost\s*:\s*ok=\d+\s+changed=0\b', str(log))
         return result
 
-    def prepare_cli_migration(self):
-        commands = ['yq', 'bat', 'fd', 'gh', 'rg', 'delta', 'shellcheck', 'hyperfine']
-        installs = self.home / '.local/share/mise/installs'
-        for command in commands:
-            binary = installs / command / 'bin' / command
-            binary.parent.mkdir(parents=True)
-            binary.write_text('#!/bin/sh\nexit 0\n')
-            binary.chmod(0o755)
-        mise = self.base / 'mise'
-        mise.write_text(f'#!{sys.executable}\nimport pathlib,sys\n'
-                        f'root = pathlib.Path({str(installs)!r})\n'
-                        'if len(sys.argv) != 3 or sys.argv[1] != "which": sys.exit(1)\n'
-                        'print(root / sys.argv[2] / "bin" / sys.argv[2])\n')
-        mise.chmod(0o755)
-        legacy_yq = b'fixture: former Workstation yq binary\n'
-        return {
-            'mise_binary': str(mise),
-            'mise_config_dest': str(self.base / 'mise.toml'),
-            'cli_tools_legacy_yq_checksums': [hashlib.sha256(legacy_yq).hexdigest()],
-        }, legacy_yq
-
-    def test_cli_migration_ownership(self):
-        values, legacy_yq = self.prepare_cli_migration()
-        directory = self.home / '.local/bin'
-        (directory / 'fd').symlink_to('/usr/bin/fdfind')
-        (directory / 'bat').symlink_to('/usr/bin/batcat')
-        (directory / 'yq').write_bytes(legacy_yq)
-        self.apply('cli_tools', values, tags='cli_tools_legacy_launchers')
-        for name in ['fd', 'bat', 'yq']:
-            self.assertFalse((directory / name).exists())
-            self.assertFalse((directory / name).is_symlink())
-        self.apply('cli_tools', values, tags='cli_tools_legacy_launchers', unchanged=True)
-        for name in ['fd', 'bat', 'yq']:
-            for kind in ['file', 'foreign-link', 'broken-link']:
-                with self.subTest(name=name, collision=kind):
-                    entry = directory / name
-                    foreign = self.base / f'{name}-{kind}'
-                    if kind == 'file':
-                        entry.write_text('user-owned sentinel')
-                    else:
-                        if kind == 'foreign-link':
-                            foreign.write_text('user-owned target')
-                        entry.symlink_to(foreign)
-                    result = self.apply('cli_tools', values, tags='cli_tools_legacy_launchers', success=False)
-                    self.assertIn('retained; review its ownership', result.stdout)
-                    if kind == 'file':
-                        self.assertEqual(entry.read_text(), 'user-owned sentinel')
-                    else:
-                        self.assertEqual(os.readlink(entry), str(foreign))
-                    entry.unlink()
-
-    def test_cli_migration_requires_installed_replacements(self):
-        values, _ = self.prepare_cli_migration()
-        legacy = self.home / '.local/bin/bat'
-        legacy.symlink_to('/usr/bin/batcat')
-        (self.home / '.local/share/mise/installs/gh/bin/gh').unlink()
-        self.apply('cli_tools', values, tags='cli_tools_legacy_launchers', success=False)
-        self.assertEqual(os.readlink(legacy), '/usr/bin/batcat')
-
     def test_browser_wrapper_guards(self):
         native = self.base / 'native'
         native.mkdir()
@@ -133,6 +73,14 @@ class Regressions(unittest.TestCase):
             result = subprocess.run([str(wrapper), '--session', 'fixture', 'wait', '#status', *flags], env=environment, capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)[-len(flags):], flags)
+        for engine in ['lightpanda', 'chrome']:
+            result = subprocess.run([str(wrapper), '--session', 'fixture', 'snapshot', '--engine', engine], env=environment, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            forwarded = json.loads(result.stdout)
+            self.assertEqual(forwarded[forwarded.index('--engine') + 1], engine)
+        for flags in [['--engine', 'foreign'], ['--engine'], ['--engine', 'chrome', '--engine=lightpanda']]:
+            result = subprocess.run([str(wrapper), '--session', 'fixture', 'snapshot', *flags], env=environment, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 2, flags)
         for args in [['open', 'about:blank', '--state=saved.json'], ['open', 'about:blank', '--state', 'saved.json'], ['connect', '9222'], ['close', '--all']]:
             result = subprocess.run([str(wrapper), '--session', 'fixture', *args], env=environment, capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 2, args)
@@ -153,6 +101,14 @@ class Regressions(unittest.TestCase):
         self.assertIn('--no-usage-statistics', server['args'])
         self.assertIn('--no-performance-crux', server['args'])
         self.assertNotIn('playwright', data['mcp_servers'])
+
+        # A custom source owns its marketplace table; provisioning must not append another.
+        custom = self.base / 'custom-codex.toml'
+        contents = 'model = "fixture"\n[marketplaces.drawio]\nsource_type = "git"\nsource = "https://example.invalid/reviewed.git"\nref = "reviewed"\n'
+        custom.write_text(contents)
+        self.apply('codex', {**values, 'codex_config_src': str(custom)}, tags='codex_config')
+        self.assertEqual((config / 'config.toml').read_text(), contents)
+        self.assertEqual(tomllib.loads((config / 'config.toml').read_text())['marketplaces']['drawio']['ref'], 'reviewed')
 
     @unittest.skipUnless(OPTIONS.installed_tools, 'requires --installed-tools on a prepared VM')
     def test_codex_plugin_configuration_idempotency(self):

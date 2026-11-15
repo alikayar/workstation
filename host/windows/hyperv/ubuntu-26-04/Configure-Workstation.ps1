@@ -1,15 +1,53 @@
+function Read-WorkstationSelection([string]$Title, [string[]]$Keys, [string[]]$Labels, [switch]$All) {
+    Write-Host $Title
+    for($i=0;$i -lt $Keys.Count;$i++){Write-Host ('  {0}. {1} - {2}' -f ($i+1),$Keys[$i],$Labels[$i])}
+    if($All){return $Keys}
+    while($true){
+        $answer=(Read-Host 'Select numbers/names separated by commas; hepsi = all, blank = none').Trim().ToLowerInvariant()
+        if($answer -eq 'hepsi'){return $Keys}
+        $selected=@();$invalid=@()
+        foreach($value in @($answer.Split(',') | ForEach-Object {$_.Trim()} | Where-Object {$_})){
+            $index=0
+            if([int]::TryParse($value,[ref]$index) -and $index -ge 1 -and $index -le $Keys.Count){$selected+=$Keys[$index-1]}
+            elseif($value -in $Keys){$selected+=$value}
+            else{$invalid+=$value}
+        }
+        if(-not $invalid.Count){return @($selected | Select-Object -Unique)}
+        Write-Host ('Unknown selection(s): '+($invalid -join ', '))
+    }
+}
+
 function Read-WorkstationConfiguration([switch]$Enable) {
-    $enabled=[bool]$Enable
+    $enabled=[bool]$Enable;$all=$false
     if(-not $Enable){
-        do { $answer=(Read-Host 'Install the Workstation development environment too? [Y/n]').Trim() } while($answer -notmatch '^(|y|yes|n|no)$')
-        $enabled=$answer -match '^(|y|yes)$'
+        do {$answer=(Read-Host 'Install the Workstation development environment too? [Y/n/hepsi]').Trim().ToLowerInvariant()} while($answer -notmatch '^(|y|yes|n|no|hepsi)$')
+        $enabled=$answer -match '^(|y|yes|hepsi)$'
+        $all=$answer -eq 'hepsi'
     }
-    $name='';$email=''
+    $name='';$email='';$languages=@();$components=@()
     if($enabled){
-        do { $name=(Read-Host 'Git author name').Trim() } while(-not $name -or $name -match '[\r\n]')
-        do { $email=(Read-Host 'Git author email').Trim() } while($email -notmatch '^[^\s@]+@[^\s@]+$')
+        Write-Host 'Base: Zsh/default shell, Git/config, mise/config and shared CLI tools.'
+        $languages=@(Read-WorkstationSelection 'Language runtimes' @('node','python','go','bun','php') @('Node.js','Python','Go','Bun','PHP + Composer and build prerequisites') -All:$all)
+        $components=@(Read-WorkstationSelection 'Development tools' @('codex','docker','vscode') @('VM Codex with full filesystem access, config/AGENTS/rules replacement and draw.io; includes Node/Python','Docker Engine/service and root-equivalent docker group membership','Remote VS Code server settings; no host installation') -All:$all)
+        $components+=@(Read-WorkstationSelection 'Helper tools' @('browser','audit','graphify','markitdown') @('Lightpanda, Chrome, agent-browser and AppArmor policy','Lighthouse + SiteOne; includes browser tools and Node','Repository indexing with its own pinned Python runtime','Document converter; includes Python') -All:$all)
+        $required=@()
+        if('codex' -in $components){$required+=@('node','python')}
+        if('audit' -in $components){$required+='node'}
+        if('markitdown' -in $components){$required+='python'}
+        $added=@($required | Where-Object {$_ -notin $languages} | Select-Object -Unique)
+        $languages=@(@($languages)+$required | Select-Object -Unique)
+        if($added.Count){Write-Host ('Required runtimes added for selected tools: '+($added -join ', '))}
+        Write-Host ('Selected languages: '+$(if($languages.Count){$languages -join ', '}else{'none'}))
+        Write-Host ('Selected tools: '+$(if($components.Count){$components -join ', '}else{'none'}))
+        Write-Host 'The base environment is included. PHP includes Composer/build dependencies; audit includes browser tools. Omitted choices do not uninstall existing software.'
+        do {$answer=(Read-Host 'Apply this scope inside Ubuntu? [y/N]').Trim()} while($answer -notmatch '^(|y|yes|n|no)$')
+        $enabled=$answer -match '^(y|yes)$'
+        if($enabled){
+            do {$name=(Read-Host 'Git author name').Trim()} while(-not $name -or $name -match '[\r\n]')
+            do {$email=(Read-Host 'Git author email').Trim()} while($email -notmatch '^[^\s@]+@[^\s@]+$')
+        }
     }
-    [pscustomobject]@{Enabled=$enabled;State='Pending';GitName=$name;GitEmail=$email;SourceHash=''}
+    [pscustomobject]@{Enabled=$enabled;State='Pending';GitName=$name;GitEmail=$email;Languages=$languages;Components=$components;SourceHash=''}
 }
 
 function New-WorkstationBundle([string]$Path) {
@@ -76,7 +114,7 @@ function Invoke-UbuntuWorkstation([object]$Record) {
     if($LASTEXITCODE){throw 'Workstation source upload failed; VM retained.'}
     & $scp @options $runner ($target+':'+$remote+'/configure-workstation.py')
     if($LASTEXITCODE){throw 'Workstation runner upload failed; VM retained.'}
-    $settings=@{git_user_name=$Record.Workstation.GitName;git_user_email=$Record.Workstation.GitEmail}|ConvertTo-Json -Compress
+    $settings=@{git_user_name=$Record.Workstation.GitName;git_user_email=$Record.Workstation.GitEmail;components=@($Record.Workstation.Components);languages=@($Record.Workstation.Languages)}|ConvertTo-Json -Compress
     $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($settings))
     $Record.Workstation.State='Running';Save-WVMRecord $Record
     Write-Host 'Configuring Workstation inside Ubuntu. Enter your sudo password in the guest prompt.'

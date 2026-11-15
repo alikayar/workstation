@@ -26,8 +26,8 @@
 
 [credential "https://github.com"]
     helper =
-    helper = !/usr/bin/gh auth git-credential
+    helper = {{ ("!" ~ ((workstation_home ~ "/.local/share/mise/shims/gh") | quote) ~ " auth git-credential") | to_json(ensure_ascii=False) }}
 
 [credential "https://gist.github.com"]
     helper =
-    helper = !/usr/bin/gh auth git-credential
+    helper = {{ ("!" ~ ((workstation_home ~ "/.local/share/mise/shims/gh") | quote) ~ " auth git-credential") | to_json(ensure_ascii=False) }}

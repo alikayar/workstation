@@ -54,12 +54,6 @@
     fail_msg: The Docker repository key fingerprint did not match the pinned value.
   when: not ansible_check_mode
 
-- name: Remove the legacy Docker repository definition
-  become: true
-  ansible.builtin.file:
-    path: /etc/apt/sources.list.d/docker.list
-    state: absent
-
 - name: Configure the Docker APT repository
   become: true
   ansible.builtin.deb822_repository:

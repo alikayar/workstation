@@ -21,6 +21,16 @@
       Run Ansible as the intended non-root user so USER and HOME point to
       the account that should receive the Zsh configuration.
 
+- name: Validate the selected language runtimes
+  become: false
+  ansible.builtin.assert:
+    that:
+      - workstation_languages is sequence
+      - workstation_languages is not string
+      - workstation_languages is not mapping
+      - workstation_languages | difference(['node', 'python', 'go', 'bun', 'php']) | length == 0
+    fail_msg: workstation_languages must be a list containing only node, python, go, bun or php; an empty list installs shared tools only.
+
 - name: Check for the classic sudo executable
   become: false
   ansible.builtin.stat:

@@ -38,15 +38,15 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | Tool | Purpose | Provisioning | Reference |
 | --- | --- | --- | --- |
 | Git | Version control with managed identity and defaults. | `git` role: Ubuntu package and `.gitconfig`. | [Documentation](https://git-scm.com/doc) |
-| Git Delta (`delta`) | Readable Git diffs. | `cli_tools` role: `git-delta`. | [Documentation](https://dandavison.github.io/delta/) |
-| GitHub CLI (`gh`) | GitHub commands and Git credential helper. | `cli_tools` role: `gh`. | [Documentation](https://cli.github.com/manual/) |
-| bat | Read source files with syntax highlighting. | `cli_tools` role: `bat`. | [Repository](https://github.com/sharkdp/bat#usage) |
+| Git Delta (`delta`) | Readable Git diffs. | Pinned mise tool. | [Documentation](https://dandavison.github.io/delta/) |
+| GitHub CLI (`gh`) | GitHub commands and Git credential helper. | Pinned mise tool. | [Documentation](https://cli.github.com/manual/) |
+| bat | Read source files with syntax highlighting. | Pinned mise tool. | [Repository](https://github.com/sharkdp/bat#usage) |
 | btop | Monitor VM resource usage. | `cli_tools` role: `btop`. | [Repository](https://github.com/aristocratos/btop#documentation) |
 | eza | Git-aware file listings and shell aliases. | `cli_tools` role: `eza`; `shell` role: aliases. | [Repository](https://github.com/eza-community/eza#command-line-options) |
-| fd | Search for files and directories. | `cli_tools` role: `fd-find`. | [Repository](https://github.com/sharkdp/fd#how-to-use) |
+| fd | Search for files and directories. | Pinned mise tool. | [Repository](https://github.com/sharkdp/fd#how-to-use) |
 | jq | Query and transform JSON. | `cli_tools` role: `jq`. | [Documentation](https://jqlang.org/manual/) |
-| yq | Query and transform YAML and related formats. | `cli_tools` role: pinned binary with checksum. | [Documentation](https://mikefarah.gitbook.io/yq/) |
-| ripgrep (`rg`) | Search source code and text. | `cli_tools` role: `ripgrep`. | [Repository](https://github.com/BurntSushi/ripgrep#user-guide) |
+| yq | Query and transform YAML and related formats. | Pinned mise tool. | [Documentation](https://mikefarah.gitbook.io/yq/) |
+| ripgrep (`rg`) | Search source code and text. | Pinned mise tool. | [Repository](https://github.com/BurntSushi/ripgrep#user-guide) |
 | ast-grep | Structural code search and rewriting. | Pinned mise tool; use `ast-grep` to avoid Ubuntu's unrelated `sg` command. | [Documentation](https://ast-grep.github.io/guide/quick-start.html) |
 | FFmpeg / ffprobe | Audio/video processing and machine-readable media metadata. | `cli_tools` role: `ffmpeg`. | [Documentation](https://ffmpeg.org/documentation.html) |
 
@@ -55,10 +55,10 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | Tool | Purpose | Provisioning | Reference |
 | --- | --- | --- | --- |
 | Ruff | Python linting and formatting when explicitly requested. | Pinned mise tool; project configuration takes precedence. | [Documentation](https://docs.astral.sh/ruff/) |
-| ShellCheck | Shell script diagnostics when explicitly requested. | `cli_tools` role: `shellcheck`. | [Repository](https://github.com/koalaman/shellcheck) |
+| ShellCheck | Shell script diagnostics when explicitly requested. | Pinned mise tool. | [Repository](https://github.com/koalaman/shellcheck) |
 | actionlint | GitHub Actions workflow diagnostics when explicitly requested. | Pinned mise tool. | [Repository](https://github.com/rhysd/actionlint) |
-| hyperfine | Command timing comparisons when explicitly requested. | `cli_tools` role: `hyperfine`. | [Repository](https://github.com/sharkdp/hyperfine) |
-| agent-browser, Chrome for Testing (`workstation-browser-task`) | Session-scoped browser automation with task cleanup and retained screenshots. | `agent_tools` role: checksum-pinned native CLI and managed Chrome on x86_64; no shared Playwright test runner. | [Browser automation](agent-environment.md#browser-automation) |
+| hyperfine | Command timing comparisons when explicitly requested. | Pinned mise tool. | [Repository](https://github.com/sharkdp/hyperfine) |
+| agent-browser, Lightpanda, Chrome for Testing (`workstation-browser-task`) | Session-scoped automation with Lightpanda by default; explicit Chrome for visual work. | `agent_tools` role: checksum-pinned native CLI and engines on x86_64; no shared Playwright test runner. | [Browser automation](agent-environment.md#browser-automation) |
 | Lighthouse (`lighthouse`) | Native page performance, accessibility, best-practices and technical SEO reports. | `agent_tools` role: pinned official npm package, workstation Node and existing managed Chrome. | [Installation](agent-environment.md#website-audits), [upstream CLI](https://github.com/GoogleChrome/lighthouse#using-the-node-cli) |
 | SiteOne (`siteone-crawler`) | Bounded site crawling, link/metadata inventories and native JSON/HTML reports. | `agent_tools` role: checksum-pinned upstream Linux static binary (x64/ARM64), direct symlink; no runtime service or project dependency. | [Installation](agent-environment.md#website-audits), [upstream release](https://github.com/janreges/siteone-crawler/releases/tag/v2.5.1) |
 
@@ -75,8 +75,8 @@ This inventory shows what each tool contributes and how Workstation provisions i
 ## Implementation notes
 
 - Zsh syntax highlighting is sourced last in `.zshrc`; see the [shell design](shell.md).
-- Ubuntu names the bat and fd binaries `batcat` and `fdfind`. The `cli_tools` role provides `bat` and `fd` symlinks in `~/.local/bin`.
-- The managed Git configuration uses `gh` as the credential helper for GitHub and Gist. Authentication state is not stored in this repository.
+- mise provides `bat` and `fd` directly through its shims; no distribution-name aliases are installed.
+- The managed Git configuration uses the absolute mise `gh` shim as the credential helper for GitHub and Gist. Authentication state is not stored in this repository.
 - Docker group membership grants root-equivalent access to the Docker host.
 
 ## Ownership and use

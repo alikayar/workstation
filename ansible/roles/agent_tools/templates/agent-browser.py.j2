@@ -11,7 +11,7 @@ def main():
     args = sys.argv[1:]
     if args in (["--help"], ["--version"]):
         if args == ["--help"]:
-            print("Workstation usage: agent-browser --session TASK COMMAND [FLAGS ...]. Put flags after the command; local transient sessions only.", file=sys.stderr, flush=True)
+            print("Workstation usage: agent-browser --session TASK COMMAND [FLAGS ...]. Default engine: {{ agent_tools_browser_engine }}; --engine lightpanda|chrome follows COMMAND. Local transient sessions only.", file=sys.stderr, flush=True)
         os.execv(binary, [binary, *args])
     session = os.environ.get("AGENT_BROWSER_SESSION", "")
     if args[:1] == ["--session"]:
@@ -26,6 +26,26 @@ def main():
         raise ValueError("Put the browser command immediately after --session TASK; put other flags after the command.")
     if args[0] == "connect":
         raise ValueError("Managed task sessions cannot attach to an existing browser.")
+    engines = {
+        "lightpanda": {{ (agent_tools_browser_lightpanda_dir ~ '/lightpanda') | to_json }},
+        "chrome": {{ (agent_tools_browser_chrome_dir ~ '/chrome-linux64/chrome') | to_json }},
+    }
+    engine = {{ agent_tools_browser_engine | to_json }}
+    # Select only a managed engine; executable/config overrides remain forbidden.
+    filtered = [args[0]]
+    arguments = iter(args[1:])
+    selected = False
+    for argument in arguments:
+        if argument == "--engine" or argument.startswith("--engine="):
+            if selected:
+                raise ValueError("Select the browser engine only once.")
+            engine = next(arguments, "") if argument == "--engine" else argument.split("=", 1)[1]
+            selected = True
+        else:
+            filtered.append(argument)
+    if engine not in engines:
+        raise ValueError("Use the managed lightpanda or chrome engine.")
+    args = filtered
     # These flags change session ownership, load saved state, attach another browser,
     # or override the installed binary/config and abandoned-session cleanup defaults.
     reserved = {
@@ -49,7 +69,8 @@ def main():
     command = [
         binary, "--session", session,
         "--config", {{ (agent_tools_browser_install_dir ~ '/config.json') | to_json }},
-        "--executable-path", {{ (agent_tools_browser_chrome_dir ~ '/chrome-linux64/chrome') | to_json }},
+        "--engine", engine,
+        "--executable-path", engines[engine],
         "--idle-timeout", {{ agent_tools_browser_idle_timeout | to_json }},
         *args,
     ]

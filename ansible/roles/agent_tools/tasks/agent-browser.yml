@@ -3,6 +3,7 @@
   ansible.builtin.assert:
     that: ansible_facts['architecture'] == 'x86_64'
     fail_msg: The pinned local Chrome for Testing package is available only on x86_64; disable agent_tools_browser_enabled on ARM64.
+  tags: [agent_browser_lightpanda]
 
 - name: Inspect existing browser launchers
   become: false
@@ -14,6 +15,7 @@
     get_attributes: false
   loop: [agent-browser, workstation-browser-task]
   register: agent_tools_browser_launchers
+  tags: [agent_browser_lightpanda]
 
 - name: Refuse linked or non-file browser launchers
   ansible.builtin.assert:
@@ -25,6 +27,7 @@
   loop: "{{ agent_tools_browser_launchers.results }}"
   loop_control:
     label: "{{ item.item }}"
+  tags: [agent_browser_lightpanda]
 
 - name: Read existing browser launchers before replacement
   become: false
@@ -35,6 +38,7 @@
   loop_control:
     label: "{{ item.item }}"
   register: agent_tools_browser_existing
+  tags: [agent_browser_lightpanda]
 
 - name: Preserve launchers not managed by Workstation
   ansible.builtin.assert:
@@ -44,6 +48,7 @@
   loop: "{{ agent_tools_browser_existing.results }}"
   loop_control:
     label: "{{ item.item.item }}"
+  tags: [agent_browser_lightpanda]
 
 - name: Install browser runtime libraries and archive support
   become: true
@@ -74,6 +79,24 @@
     group: root
     mode: '0755'
   when: not ansible_check_mode
+
+- name: Create the versioned user-local Lightpanda directory
+  become: false
+  ansible.builtin.file:
+    path: "{{ agent_tools_browser_lightpanda_dir }}"
+    state: directory
+    mode: '0700'
+  tags: [agent_browser_lightpanda]
+
+- name: Install the checksum-pinned Lightpanda engine
+  become: false
+  ansible.builtin.get_url:
+    url: "https://github.com/lightpanda-io/browser/releases/download/{{ agent_tools_browser_lightpanda_version }}/lightpanda-x86_64-linux"
+    dest: "{{ agent_tools_browser_lightpanda_dir }}/lightpanda"
+    checksum: "sha256:{{ agent_tools_browser_lightpanda_sha256 }}"
+    mode: '0700'
+  when: not ansible_check_mode
+  tags: [agent_browser_lightpanda]
 
 - name: Install isolated browser defaults without changing user configuration
   become: true
@@ -169,6 +192,7 @@
   loop:
     - {path: "{{ workstation_home }}/.local/bin", mode: '0755'}
     - {path: "{{ agent_tools_browser_output_dir }}", mode: '0700'}
+  tags: [agent_browser_lightpanda]
 
 - name: Install the session-required agent-browser launcher
   become: false
@@ -176,7 +200,7 @@
     src: agent-browser.py.j2
     dest: "{{ workstation_home }}/.local/bin/agent-browser"
     mode: '0755'
-  tags: [agent_browser_launcher]
+  tags: [agent_browser_launcher, agent_browser_lightpanda]
 
 - name: Install the browser task cleanup launcher
   become: false
@@ -184,3 +208,4 @@
     src: browser-task.py.j2
     dest: "{{ workstation_home }}/.local/bin/workstation-browser-task"
     mode: '0755'
+  tags: [agent_browser_lightpanda]

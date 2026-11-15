@@ -24,6 +24,8 @@ nano ansible/host_vars/localhost.yml
 
 ## Apply the workstation configuration
 
+This is a fresh-install baseline. The untagged playbook installs all default-enabled roles, including all configured runtimes, VM Codex settings/plugins, Docker Engine and its user group, browser/audit tools and repository indexing. Review the sources and choose tags or overrides before applying; there are no per-package questions or automatic legacy migrations. The Windows `wvm` path asks separately for languages, development tools and helper tools, supports `hepsi` for all choices, and requires scope confirmation before running selected tags. For direct Ansible applies, `workstation_languages` in ignored host variables controls the runtime list; the default includes all five languages.
+
 Run the playbook from the repository root:
 
 ```bash
@@ -75,7 +77,7 @@ Choose the relevant scope rather than applying everything for a documentation-on
 | Runtimes/PHP/Composer | `runtimes` | PHP build prerequisites, managed mise configuration, pinned runtimes and Composer. Project lockfiles stay authoritative. |
 | Git | `git` | Managed `~/.gitconfig`; existing content receives an Ansible backup. |
 | Codex settings only | `codex_config` | Replaces the complete `~/.codex/config.toml` from the configured source, including rendered browser paths. |
-| All Codex defaults | `codex` | Also replaces global AGENTS and command rules, manages the pinned plugin and removes retired launchers. |
+| All Codex defaults | `codex` | Also replaces global AGENTS and command rules and manages the pinned plugin. |
 | Browser/Graphify/audits | `agent_browser`, `graphify`, `lighthouse`, `siteone` | Tool binaries/environments and launchers; browser setup may change libraries/AppArmor policy. |
 | Docker | `docker` | Repository, packages, service and optional Docker-group membership. |
 
@@ -90,7 +92,7 @@ Check mode is a preview, not proof that downloads, extraction or a live tool wil
 
 ### Configuration ownership
 
-This setup owns complete files, not only selected keys. A `codex_config` or `codex` apply replaces existing Codex user settings; `codex` also replaces `~/.codex/AGENTS.md` and `rules/default.rules`. Review the intended sources before applying. If personal instructions/settings must remain independent, select maintained source overrides (`codex_config_src`, `codex_agents_src`, `codex_rules_src`) through the ignored host variables, or omit the Codex scope deliberately. The config source is rendered as a template. Do not put credentials in managed sources or assume an Ansible backup exists for Codex files. Existing personal/shared skills are never installed or modified by Workstation.
+This setup owns complete files, not only selected keys. A `codex_config` or `codex` apply replaces existing Codex user settings; `codex` also replaces `~/.codex/AGENTS.md` and `rules/default.rules`. Review the intended sources before applying. If personal instructions/settings must remain independent, select maintained source overrides (`codex_config_src`, `codex_agents_src`, `codex_rules_src`) through the ignored host variables, or omit the Codex scope deliberately. The config source is rendered as a template without appending tables. The default template owns the draw.io marketplace identity; a custom source owns its complete content, including marketplace registration when the plugin scope is used. Do not put credentials in managed sources or assume an Ansible backup exists for Codex files. Existing personal/shared skills are never installed or modified by Workstation.
 
 Shell and Git tasks have their own backup behavior; VS Code merges its selected settings. Consult each role before assuming a whole-machine merge or rollback. For changes that require restoring previous system/user state, arrange a VM checkpoint or approved backup with your existing VM manager before applying. No checkpoint or private-file backup is created by these update commands.
 
@@ -198,4 +200,4 @@ Use the [verification guide](verification.md) to choose source checks, isolated 
 
 ## PHP and Composer
 
-Use the [mise and PHP guide](mise.md#php-and-composer) for source-build prerequisites, the scoped apply command, Composer ownership and migration limits.
+Use the [mise and PHP guide](mise.md#php-and-composer) for source-build prerequisites, the scoped apply command and Composer ownership.

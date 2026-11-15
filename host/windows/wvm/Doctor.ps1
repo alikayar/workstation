@@ -226,8 +226,8 @@ function Invoke-DoctorUbuntuPolicy($Report, $Record, $VM) {
     $expected = @(Get-UbuntuNetworkRules $topology)
     $actual = Get-UbuntuAdapterRules $adapter
     try {
-        Assert-UbuntuNetworkRules $actual @($state.Extended) @($state.Mac) -Exact
-        Assert-UbuntuNetworkRules $actual $expected @() -Exact
+        Assert-UbuntuNetworkRules $actual @($state.Extended) -Exact
+        Assert-UbuntuNetworkRules $actual $expected -Exact
     } catch { throw [IO.InvalidDataException]::new('Live ACLs, the policy journal and the current recipe do not agree.') }
     if (-not (Test-UbuntuAdapterGuards $adapter)) { throw [IO.InvalidDataException]::new('Network adapter guard settings differ.') }
     Add-DoctorFinding $Report OK Network $VM.Name 'Isolation ACLs/topology/guards match the current recipe' 'Configuration check only; guest-to-host/LAN blocking and internet traffic were not tested.'

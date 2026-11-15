@@ -51,10 +51,39 @@ def apply(bundle, expected_hash, installation_id, encoded_settings):
     if hashlib.sha256(bundle.read_bytes()).hexdigest() != expected_hash:
         raise RuntimeError("Uploaded Workstation source hash differs")
     settings = json.loads(base64.b64decode(encoded_settings))
-    if set(settings) != {"git_user_name", "git_user_email"}:
+    if not isinstance(settings, dict) or set(settings) != {"git_user_name", "git_user_email", "components", "languages"}:
         raise RuntimeError("Unexpected configuration settings")
-    if not all(isinstance(value, str) and value.strip() for value in settings.values()):
+    if not all(isinstance(settings[key], str) and settings[key].strip()
+               for key in ("git_user_name", "git_user_email")):
         raise RuntimeError("Git identity is required")
+    components = settings.pop("components")
+    optional_tags = {
+        "codex": ["codex"], "docker": ["docker"], "vscode": ["vscode"],
+        "browser": ["agent_browser"], "audit": ["agent_browser", "lighthouse", "siteone"],
+        "graphify": ["graphify"], "markitdown": ["markitdown"],
+    }
+    if (not isinstance(components, list)
+            or any(not isinstance(item, str) or item not in optional_tags for item in components)):
+        raise RuntimeError("Unexpected component selection")
+    languages = settings.pop("languages")
+    if (not isinstance(languages, list)
+            or any(not isinstance(item, str) or item not in {"node", "python", "go", "bun", "php"}
+                   for item in languages)):
+        raise RuntimeError("Unexpected language selection")
+    required = set()
+    if "codex" in components:
+        required.update(("node", "python"))
+    if "audit" in components:
+        required.add("node")
+    if "markitdown" in components:
+        required.add("python")
+    if not required.issubset(languages):
+        raise RuntimeError("Selected tools are missing their required runtimes")
+    tags = ["shell", "git", "mise", "cli_tools"]
+    for component in components:
+        tags.extend(optional_tags[component])
+    settings["workstation_languages"] = languages
+    settings["agent_tools_markitdown_enabled"] = "markitdown" in components
     # Keep each run separate from user repositories and earlier interrupted runs.
     parent = Path.home() / ".local/share/workstation/provision"
     parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +104,8 @@ def apply(bundle, expected_hash, installation_id, encoded_settings):
             # Ansible's "-" password source reads stdin; no password file or argv value.
             subprocess.run(
                 ["ansible-playbook", "ansible/site.yml",
-                 "--become-password-file", "-", "--extra-vars", f"@{variables}"],
+                 "--become-password-file", "-", "--tags", ",".join(dict.fromkeys(tags)),
+                 "--extra-vars", f"@{variables}"],
                 cwd=source, env=environment, input=password + b"\n", check=True,
             )
         finally:

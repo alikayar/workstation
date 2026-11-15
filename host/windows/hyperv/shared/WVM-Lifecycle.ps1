@@ -7,13 +7,12 @@ function Read-WVMRecord([string]$Path, [string]$VMName) {
     Assert-WVMRecord $record
     $guest = $record.Guest
     $root = Join-Path (Split-Path -Parent (Split-Path -Parent $Path)) $VMName
-    if ([IO.Path]::GetFileName($Path).StartsWith('.')) { $root = Join-Path (Split-Path -Parent $Path) $VMName }
     Assert-PlainPath $root
     if ($record.Name -ine $VMName -or $record.Root -ine $root -or $record.OwnerSID -cne [Security.Principal.WindowsIdentity]::GetCurrent().User.Value -or $record.Token -cnotmatch '^[a-f0-9]{32}$') { throw 'VM ownership record differs; nothing changed.' }
     [pscustomobject]@{ Guest = $guest; Record = $record; RecordPath = $Path }
 }
 
-function Get-WVMTarget([string]$VMName, [string]$VMRoot, [switch]$AllowOrphan) {
+function Get-WVMTarget([string]$VMName, [string]$VMRoot) {
     if ([string]::IsNullOrWhiteSpace($VMName)) { throw 'Supply an exact VM name, for example: wvm start interview.' }
     if ($VMRoot) {
         if ($VMRoot -notmatch '^[a-zA-Z]:[\\/]') { throw 'VMRoot must be an absolute local drive path.' }
@@ -34,21 +33,10 @@ function Get-WVMTarget([string]$VMName, [string]$VMRoot, [switch]$AllowOrphan) {
             if ($paths.Count) { break }
             $cursor = [IO.Path]::GetDirectoryName($cursor)
         }
-    } elseif ($AllowOrphan) {
-        if ($VMName -notmatch '^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$') { throw 'Invalid managed VM name.' }
-        $parents = if ($VMRoot) { @($VMRoot) } else { @("$env:ProgramData\Workstation\WindowsVMs", "$env:ProgramData\Workstation\UbuntuVMs") }
-        foreach ($parent in $parents) {
-            foreach ($relative in @((Join-Path $VMName 'windows-vm.json'), (Join-Path $VMName 'ubuntu-vm.json'), ('.' + $VMName + '.delete.json'))) {
-                $path = Join-Path $parent $relative
-                Assert-PlainPath $path
-                if (Test-Path -LiteralPath $path) { $paths += $path }
-            }
-        }
-        $paths = @($paths | Group-Object { (Read-WVMRecord $_ $VMName).Record.Root } | ForEach-Object { $_.Group[0] })
     } else { throw "VM not found: $VMName" }
-    if ($paths.Count -gt 1) { throw 'Multiple ownership records found; specify -VMRoot for orphan cleanup.' }
+    if ($paths.Count -gt 1) { throw 'Multiple ownership records found.' }
     if (-not $paths.Count) {
-        if ($AllowOrphan -or -not $vm -or $vm.Notes -match '^Workstation (Windows|Ubuntu) VM ') { throw 'No Workstation ownership record found. For orphan cleanup, supply -VMRoot; unmanaged VMs cannot be deleted.' }
+        if ($vm.Notes -match '^Workstation (Windows|Ubuntu) VM ') { throw 'No Workstation ownership record found.' }
         return [pscustomobject]@{ VM = $vm; Guest = ''; Record = $null; RecordPath = '' }
     }
     $target = Read-WVMRecord $paths[0] $VMName

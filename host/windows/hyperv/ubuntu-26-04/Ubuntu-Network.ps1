@@ -22,8 +22,6 @@ function Get-UbuntuNetworkTopology([string]$SwitchName) {
     $interfaces = @(Get-NetAdapter -IncludeHidden | Where-Object Name -ceq ('vEthernet (' + $SwitchName + ')'))
     if ($interfaces.Count -ne 1) { throw 'Cannot uniquely identify the Default Switch host interface; no policy was changed.' }
     $interface = $interfaces[0]
-    $mac = ([string]$interface.MacAddress -replace '[:-]', '').ToUpperInvariant()
-    if ($mac -cnotmatch '^[A-F0-9]{12}$' -or $mac -eq '000000000000') { throw 'Invalid Default Switch host MAC address.' }
     $addresses = @(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.AddressState -in @('Preferred', 'Deprecated') })
     $gateway = @($addresses | Where-Object { $_.InterfaceIndex -eq $interface.ifIndex -and $_.IPAddress -notlike '169.254.*' })
     if ($gateway.Count -ne 1) { throw 'Expected one IPv4 DHCP/DNS gateway on the Default Switch; no policy was changed.' }
@@ -38,7 +36,6 @@ function Get-UbuntuNetworkTopology([string]$SwitchName) {
     [pscustomobject]@{
         SwitchId = [string]$switch.Id
         Gateway = $gateway[0].IPAddress
-        GatewayMac = $mac
         Blocked = @($blocked | Sort-Object -Unique)
     }
 }
@@ -68,11 +65,7 @@ function Get-UbuntuNetworkRules([object]$Topology) {
     return $rules.ToArray()
 }
 
-function Get-UbuntuNetworkRuleKey([object]$Rule, [switch]$Mac) {
-    if ($Mac) {
-        $remote = [string]$Rule.RemoteMacAddress
-        return (([string]$Rule.Direction).ToLowerInvariant(), ([string]$Rule.Action).ToLowerInvariant(), ($remote -replace '[:-]', '').ToUpperInvariant()) -join '|'
-    }
+function Get-UbuntuNetworkRuleKey([object]$Rule) {
     $isStateful = $false
     if ($Rule -is [Collections.IDictionary]) { if ($Rule.Contains('Stateful')) { $isStateful = [bool]$Rule['Stateful'] } }
     elseif ($Rule.PSObject.Properties['Stateful']) { $isStateful = [bool]$Rule.Stateful }
@@ -94,22 +87,14 @@ function Get-UbuntuNetworkRuleKey([object]$Rule, [switch]$Mac) {
 }
 
 function Get-UbuntuAdapterRules([object]$Adapter) {
-    $extended = @(Get-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $Adapter)
-    $mac = @(Get-VMNetworkAdapterAcl -VMNetworkAdapter $Adapter | ForEach-Object {
-        if ([string]$_.RemoteAddressType -notin @('Mac', 'WildcardMac') -or ([string]$_.LocalAddress -notin @('', 'ANY'))) { throw 'Unmanaged basic ACL found; existing rules retained.' }
-        @{ Direction = [string]$_.Direction; Action = [string]$_.Action; RemoteMacAddress = $_.RemoteAddress }
-    })
-    [pscustomobject]@{ Extended = $extended; Mac = $mac }
+    if (@(Get-VMNetworkAdapterAcl -VMNetworkAdapter $Adapter).Count) { throw 'Unmanaged basic ACL found; existing rules retained.' }
+    [pscustomobject]@{ Extended = @(Get-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $Adapter) }
 }
 
-function Assert-UbuntuNetworkRules([object]$Actual, [object[]]$Extended, [object[]]$Mac, [switch]$Exact) {
-    foreach ($kind in @('Extended', 'Mac')) {
-        $expected = $Extended
-        if ($kind -eq 'Mac') { $expected = $Mac }
-        $keys = @($expected | ForEach-Object { Get-UbuntuNetworkRuleKey $_ -Mac:($kind -eq 'Mac') })
-        $found = @($Actual.$kind | ForEach-Object { Get-UbuntuNetworkRuleKey $_ -Mac:($kind -eq 'Mac') })
-        if (@($found | Select-Object -Unique).Count -ne $found.Count -or @($found | Where-Object { $_ -cnotin $keys }).Count -or ($Exact -and @($keys | Where-Object { $_ -cnotin $found }).Count)) { throw 'Network ACLs differ from their ownership journal; no unrelated rules were removed.' }
-    }
+function Assert-UbuntuNetworkRules([object]$Actual, [object[]]$Extended, [switch]$Exact) {
+    $keys = @($Extended | ForEach-Object { Get-UbuntuNetworkRuleKey $_ })
+    $found = @($Actual.Extended | ForEach-Object { Get-UbuntuNetworkRuleKey $_ })
+    if (@($found | Select-Object -Unique).Count -ne $found.Count -or @($found | Where-Object { $_ -cnotin $keys }).Count -or ($Exact -and @($keys | Where-Object { $_ -cnotin $found }).Count)) { throw 'Network ACLs differ from their ownership journal; no unrelated rules were removed.' }
 }
 
 function Test-UbuntuAdapterGuards([object]$Adapter) {
@@ -128,37 +113,31 @@ function Set-UbuntuNetworkPolicy([object]$Record) {
     if (Test-Path -LiteralPath $path) {
         $prior = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
         if ($prior.Schema -ne 1 -or $prior.Phase -cnotin @('Applying', 'Applied') -or $prior.VMId -cne $Record.VMId -or $prior.Token -cne $Record.Token -or $prior.AdapterId -cne $adapter.Id) { throw 'Network policy ownership differs; VM retained.' }
-        Assert-UbuntuNetworkRules $actual @($prior.Extended) @($prior.Mac)
-    } elseif ($actual.Extended.Count -or $actual.Mac.Count) { throw 'Unmanaged network ACLs found; existing rules retained.' }
+        Assert-UbuntuNetworkRules $actual @($prior.Extended)
+    } elseif ($actual.Extended.Count) { throw 'Unmanaged network ACLs found; existing rules retained.' }
     $extended = @(Get-UbuntuNetworkRules $topology)
-    # Default Switch boot networking fails with wildcard MAC ACLs in live tests.
-    # IP/state rules enforce connection isolation; retain old MAC entries only for owned-rule migration.
-    $mac = @()
     if ($prior -and $prior.Phase -ceq 'Applied' -and ($prior.Topology | ConvertTo-Json -Depth 6 -Compress) -ceq ($topology | ConvertTo-Json -Depth 6 -Compress)) {
         $matches = $true
-        try { Assert-UbuntuNetworkRules $actual $extended $mac -Exact } catch { $matches = $false }
+        try { Assert-UbuntuNetworkRules $actual $extended -Exact } catch { $matches = $false }
         if ($matches -and (Test-UbuntuAdapterGuards $adapter)) { return }
     }
-    $state = [ordered]@{ Schema = 1; VMId = $Record.VMId; Token = $Record.Token; AdapterId = $adapter.Id; Phase = 'Applying'; Topology = $topology; Extended = $extended; Mac = $mac }
+    $state = [ordered]@{ Schema = 1; VMId = $Record.VMId; Token = $Record.Token; AdapterId = $adapter.Id; Phase = 'Applying'; Topology = $topology; Extended = $extended }
     if ($prior) {
         $state.Extended = @(@(@($prior.Extended) + $extended) | Group-Object { Get-UbuntuNetworkRuleKey $_ } | ForEach-Object { $_.Group[0] })
-        $state.Mac = @(@(@($prior.Mac) + $mac) | Group-Object { Get-UbuntuNetworkRuleKey $_ -Mac } | ForEach-Object { $_.Group[0] })
     }
     # Journal before the first mutation. An interrupted operation owns only these exact rules.
     Save-UbuntuText $path ($state | ConvertTo-Json -Depth 10)
     Set-VMNetworkAdapter -VMNetworkAdapter $adapter -MacAddressSpoofing Off -DhcpGuard On -RouterGuard On -AllowTeaming Off -PortMirroring None -IovWeight 0
     foreach ($rule in $actual.Extended) { Remove-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $adapter -Direction $rule.Direction -Weight $rule.Weight -Confirm:$false }
-    foreach ($rule in $actual.Mac) { Remove-VMNetworkAdapterAcl -VMNetworkAdapter $adapter -Direction $rule.Direction -Action $rule.Action -RemoteMacAddress $rule.RemoteMacAddress -Confirm:$false }
-    foreach ($rule in $mac) { Add-VMNetworkAdapterAcl -VMNetworkAdapter $adapter @rule }
     foreach ($rule in $extended) {
         try { Add-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $adapter @rule }
         catch { throw ('Hyper-V rejected network rule ' + (Get-UbuntuNetworkRuleKey $rule) + ': ' + $_.Exception.Message) }
     }
-    Assert-UbuntuNetworkRules (Get-UbuntuAdapterRules $adapter) $extended $mac -Exact
+    Assert-UbuntuNetworkRules (Get-UbuntuAdapterRules $adapter) $extended -Exact
     $vm = Get-WVMOwnedVM $Record
     if ($vm.State -ne 'Off' -or -not (Test-UbuntuAdapterGuards (@(Get-VMNetworkAdapter -VM $vm)[0]))) { throw 'VM state or network guards changed during policy installation; no successful policy was recorded.' }
     if (($topology | ConvertTo-Json -Depth 6 -Compress) -cne ((Get-UbuntuNetworkTopology $Record.SwitchName) | ConvertTo-Json -Depth 6 -Compress)) { throw 'Host topology changed during policy installation; VM left Off. Rerun setup.' }
-    $state.Phase = 'Applied'; $state.Extended = $extended; $state.Mac = $mac
+    $state.Phase = 'Applied'; $state.Extended = $extended
     Save-UbuntuText $path ($state | ConvertTo-Json -Depth 10)
 }
 
@@ -172,6 +151,6 @@ function Assert-UbuntuNetworkPolicy([object]$Record) {
     if ($state.Schema -ne 1 -or $state.Phase -cne 'Applied' -or $state.VMId -cne $Record.VMId -or $state.Token -cne $Record.Token -or $state.AdapterId -cne $adapter.Id) { throw 'Network isolation is incomplete or belongs to another adapter. Shut down the VM and rerun setup.' }
     $topology = Get-UbuntuNetworkTopology $Record.SwitchName
     if (($state.Topology | ConvertTo-Json -Depth 6 -Compress) -cne ($topology | ConvertTo-Json -Depth 6 -Compress)) { throw 'Host network topology changed. Shut down this VM and rerun setup to refresh isolation before using it.' }
-    Assert-UbuntuNetworkRules (Get-UbuntuAdapterRules $adapter) @($state.Extended) @($state.Mac) -Exact
+    Assert-UbuntuNetworkRules (Get-UbuntuAdapterRules $adapter) @($state.Extended) -Exact
     if (-not (Test-UbuntuAdapterGuards $adapter)) { throw 'VM network guard settings changed; isolation could not be verified.' }
 }

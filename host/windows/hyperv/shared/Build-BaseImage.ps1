@@ -30,13 +30,14 @@ function Remove-ImageBuilder {
     $root=Join-Path $parent $spec.BuilderName
     $name=if($Guest -eq 'Windows'){'windows-vm.json'}else{'ubuntu-vm.json'}
     $recordPath=Join-Path $root $name
-    $journal=Join-Path $parent ('.'+$spec.BuilderName+'.delete.json')
+    $journal=Get-WVMDeletionJournalPath $spec.BuilderName
     foreach($path in @($recordPath,$journal)){Assert-PackerPath $path}
-    $state=if(Test-Path -LiteralPath $recordPath){$recordPath}elseif(Test-Path -LiteralPath $journal){$journal}else{$null}
-    if($state){
-        $owned=Get-Content -LiteralPath $state -Raw|ConvertFrom-Json
+    if(Test-Path -LiteralPath $recordPath){
+        $owned=Get-Content -LiteralPath $recordPath -Raw|ConvertFrom-Json
         if($owned.ImageID -cne $spec.ID -or -not $owned.Generalized){throw 'Builder cleanup identity differs; image publication stopped.'}
-        & (Join-Path $PSScriptRoot 'Remove-OwnedVM.ps1') -Guest $Guest -VMName $spec.BuilderName -VMRoot $parent -Confirm:$false
+    }
+    if((Test-Path -LiteralPath $recordPath) -or (Test-Path -LiteralPath $journal)){
+        & (Join-Path $PSScriptRoot 'Remove-OwnedVM.ps1') -VMName $spec.BuilderName -VMRoot $parent -Confirm:$false
     }
     if((Test-Path -LiteralPath $root) -or (Test-Path -LiteralPath $journal) -or @(Get-VM|Where-Object Name -eq $spec.BuilderName).Count){throw 'Builder cleanup is incomplete; image remains unpublished.'}
 }
@@ -55,6 +56,9 @@ try {
         [IO.File]::Move((Join-Path $spec.Root 'image.pending.json'),(Join-Path $spec.Root 'image.json'))
         return (Get-WVMBaseImage $spec)
     }
+    $journal=Get-WVMDeletionJournalPath $spec.BuilderName
+    Assert-PackerPath $journal
+    if(Test-Path -LiteralPath $journal){throw 'Finish the pending builder deletion before starting another image build.'}
     if (([uint64](Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory * 1KB) -lt 6GB) { throw 'Image build needs 4 GiB plus 2 GiB retained for the host.' }
     $parent=Join-Path $spec.ImageRoot '.builds'
     if(-not(Test-Path -LiteralPath $parent)){New-WVMPrivateDirectory $parent -ImageStore}

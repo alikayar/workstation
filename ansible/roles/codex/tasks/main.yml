@@ -56,16 +56,8 @@
 
 - name: Install the Codex configuration
   become: false
-  ansible.builtin.copy:
-    # Codex persists marketplace identity here; copying only the base config
-    # erases it and makes the next plugin add report a conflicting source.
-    content: |
-      {{ lookup('template', codex_config_src) | trim }}
-
-      [marketplaces.drawio]
-      source_type = "git"
-      source = {{ codex_drawio_marketplace | to_json }}
-      ref = {{ codex_drawio_revision | to_json }}
+  ansible.builtin.template:
+    src: "{{ codex_config_src }}"
     dest: "{{ codex_config_dir }}/config.toml"
     owner: "{{ workstation_user }}"
     group: "{{ workstation_user }}"
@@ -89,12 +81,6 @@
     owner: "{{ workstation_user }}"
     group: "{{ workstation_user }}"
     mode: '0644'
-
-- name: Remove the retired Workstation browser launcher
-  become: false
-  ansible.builtin.file:
-    path: "{{ workstation_home }}/.local/bin/workstation-playwright"
-    state: absent
 
 - name: Configure user-level Codex plugins
   ansible.builtin.import_tasks: plugins.yml

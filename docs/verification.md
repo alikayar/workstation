@@ -5,7 +5,7 @@ Run checks from the repository root only when their scope is authorized. Source 
 | Level | Command or trigger | Effects and evidence |
 | --- | --- | --- |
 | Source checks | Commands below; automatic `checks` CI job on relevant PRs and pushes to `main` | Ansible syntax/lint and Python test-script syntax. No provisioning or browser startup. |
-| Isolated regressions | `python3 tests/regressions.py` | Executes actual Ansible tasks in private disposable homes; verifies CLI ownership, rendered browser guards and Codex configuration. Does not replace the user's settings. |
+| Isolated regressions | `python3 tests/regressions.py` | Executes actual Ansible tasks in private disposable homes; verifies rendered browser guards and Codex configuration. Does not replace the user's settings. |
 | Installed-tool regressions | Add `--installed-tools` on a prepared VM | Also exercises SiteOne extraction/custom paths and Lighthouse failure/recovery using native tools. May download pinned vendor packages; no application services or browser execution. |
 | Full Ubuntu install | Manually dispatch `CI` on the selected revision | Existing Ubuntu 24.04/26.04 x86_64 jobs provision disposable hosted runners, require `changed=0` on a second apply and run installed-tool regressions. |
 | Browser smoke | `python3 tests/browser_smoke.py`, or select the manual CI `browser` input | Starts one temporary loopback fixture, exercises agent-browser, Lighthouse and SiteOne sequentially, saves screenshots/native reports and closes owned resources. No external target site. |
@@ -31,7 +31,7 @@ Actionlint's pinned release uses `.github/actionlint.yaml` to recognize the `ubu
 
 ## Regressions on a prepared Ubuntu VM
 
-The tests use Python 3.11+ standard-library `unittest` and the installed Ansible CLI, with no test framework dependency. Install Workstation's CLI tools first so `/usr/bin/fdfind` and `/usr/bin/batcat` exist. `--installed-tools` additionally needs the managed mise/Node/Chrome installation and a SiteOne archive from the current checkout's provisioning. Ansible verifies the archive's pinned checksum before extraction; an absent or mismatching cache can require a vendor download.
+The tests use Python 3.11+ standard-library `unittest` and the installed Ansible CLI, with no test framework dependency. `--installed-tools` additionally needs the managed mise/Node/Chrome installation and a SiteOne archive from the current checkout's provisioning. Ansible verifies the archive's pinned checksum before extraction; an absent or mismatching cache can require a vendor download.
 
 ```sh
 python3 tests/regressions.py --installed-tools
@@ -49,7 +49,7 @@ Use a prepared x86_64 VM with agent-browser, managed Chrome, Lighthouse, SiteOne
 python3 tests/browser_smoke.py
 ```
 
-The temporary page has a Publish interaction and a deliberately broken internal link. The check verifies the visible interaction, Lighthouse's normal-page audits and SiteOne's broken-link observation. Browser sessions are task-scoped; owned processes and the fixture server are cleaned up. Logs, the published screenshot, native reports and `result.json` remain at the printed path. Inspect the screenshot when assessing appearance; automation alone does not establish visual correctness. A failed run must not be described as a pass, even if a later retry succeeds.
+The temporary page has a Publish interaction and a deliberately broken internal link. The agent-browser workflow selects `--engine chrome` on each call, including the screenshot. The check verifies the visible interaction, Lighthouse's normal-page audits and SiteOne's broken-link observation. Browser sessions are task-scoped; owned processes and the fixture server are cleaned up. Logs, the published screenshot, native reports and `result.json` remain at the printed path. Inspect the screenshot when assessing appearance; automation alone does not establish visual correctness. A failed run must not be described as a pass, even if a later retry succeeds.
 
 ## CI and release evidence
 

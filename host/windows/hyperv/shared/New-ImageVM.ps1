@@ -58,7 +58,7 @@ $locked=$false;$credential=$null
 try{
     try{$locked=$mutex.WaitOne(0)}catch [Threading.AbandonedMutexException]{$locked=$true}
     if(-not $locked){throw 'Another operation is using this VM.'}
-    $journal=Join-Path $VMRoot ('.'+$VMName+'.delete.json');Assert-PackerPath $journal
+    $journal=Get-WVMDeletionJournalPath $VMName;Assert-PackerPath $journal
     if(Test-Path -LiteralPath $journal){throw 'Finish wvm delete recovery before creating this name again.'}
     Assert-PackerIdle $root
     $vm=Get-VM|Where-Object Name -eq $VMName;$record=$null;$image=$null
@@ -77,9 +77,6 @@ try{
         }
         if($PSBoundParameters.ContainsKey('NestedVirtualization') -and [bool]$NestedVirtualization -ne $record.Nested){throw 'Saved nested virtualization differs.'}
         $NestedVirtualization=[bool]$record.Nested
-        if (-not $record.PSObject.Properties['Workstation']) {
-            $record | Add-Member -NotePropertyName Workstation -NotePropertyValue ([pscustomobject]@{Enabled=$false;State='Pending';GitName='';GitEmail='';SourceHash=''})
-        }
         if ($ConfigureWorkstation) {
             if (-not $record.Workstation.Enabled) { $record.Workstation=Read-WorkstationConfiguration -Enable }
             $record.Workstation.State='Pending'

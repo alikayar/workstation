@@ -11,7 +11,9 @@ Mise manages Node.js, Python, Go, Bun and PHP and keeps their versions in one pr
 
 ## Managed runtimes
 
-The [mise configuration](../dotfiles/mise/config.toml) pins the Node.js, Python, Go, Bun and PHP versions installed by the `mise` role, together with uv, Ruff, ast-grep, actionlint, fzf and zoxide.
+The [mise configuration template](../dotfiles/mise/config.toml) pins the Node.js, Python, Go, Bun and PHP versions installed by the `mise` role, together with uv, Ruff, ast-grep, actionlint, fzf and zoxide.
+
+`workstation_languages` selects which language entries are rendered; shared CLI entries are always included. Direct Ansible applies default to `[node, python, go, bun, php]`. Set the list in ignored host variables to narrow it, or use `[]` for shared tools only. The Windows domain menu supplies this list from the selected languages and disclosed tool dependencies. PHP build packages and Composer are skipped when PHP is absent. A custom `mise_config_src` is rendered as a template and must respect the same selection if selective installs are required. Narrowing configuration does not uninstall existing runtimes.
 
 ## Project versions and activation
 
@@ -32,8 +34,8 @@ Apply the PHP prerequisites and managed runtime configuration from the Workstati
 ansible-playbook ansible/site.yml --tags php --ask-become-pass
 ```
 
-The tag includes the mise role and therefore installs all missing configured tools, not only PHP. Enter the sudo password in your terminal. PHP's first installation compiles from source and takes longer than downloading a runtime binary.
+The tag includes the mise role and therefore installs all missing tools in the rendered configuration, not only PHP. PHP prerequisites and Composer run only when `php` is in `workstation_languages`. Enter the sudo password in your terminal. PHP's first installation compiles from source and takes longer than downloading a runtime binary.
 
-After PHP and pinned Composer are installed, the old Workstation launcher at `~/.local/bin/composer` is removed so the mise shim owns Composer resolution. Existing Ubuntu PHP packages are left installed for applications that explicitly use `/usr/bin/php`; their extensions and `/etc/php` settings do not configure mise's PHP. Project dependencies remain local: run `composer install` in the project's Composer directory.
+Composer resolves through the mise shim. This baseline does not migrate older standalone launchers or remove distribution packages. Ubuntu PHP extensions and `/etc/php` settings do not configure mise's PHP. Project dependencies remain local: run `composer install` in the project's Composer directory.
 
 The PHP backend sets `COMPOSER_HOME` inside the selected PHP installation. Existing global Composer packages and settings are not automatically migrated; project lockfiles remain authoritative.

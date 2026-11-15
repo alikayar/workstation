@@ -22,6 +22,7 @@
     - role: codex
       tags: [codex]
     - role: php
+      when: "'php' in workstation_languages"
       tags: [php, mise, runtimes]
     - role: mise
       tags: [mise, php, runtimes]

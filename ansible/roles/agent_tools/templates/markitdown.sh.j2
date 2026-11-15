@@ -1,3 +1,4 @@
 #!/bin/sh
+# Workstation managed document converter launcher v1
 # Keep the converter isolated from application Python dependencies.
 exec {{ (agent_tools_markitdown_dir ~ '/bin/markitdown') | quote }} "$@"

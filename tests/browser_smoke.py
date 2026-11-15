@@ -72,7 +72,7 @@ def run(command, output, name, env=None):
 def agent_child(url, output):
     commands = [['open', url], ['snapshot', '-i'], ['click', '#publish'], ['wait', '#status', '--state=visible'], ['get', 'text', '#status'], ['screenshot', str(output / 'published.png')]]
     for command in commands:
-        result = subprocess.run(['agent-browser', *command], capture_output=True, text=True, timeout=45)
+        result = subprocess.run(['agent-browser', *command, '--engine', 'chrome'], capture_output=True, text=True, timeout=45)
         print(json.dumps({'command': command, 'exit': result.returncode, 'stdout': result.stdout, 'stderr': result.stderr}), flush=True)
         if result.returncode:
             raise RuntimeError(command)

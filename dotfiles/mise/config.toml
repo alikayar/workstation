@@ -1,9 +1,19 @@
 [tools]
+{% if 'node' in workstation_languages %}
 node = "26.13.0"
+{% endif %}
+{% if 'python' in workstation_languages %}
 python = "3.15.2"
+{% endif %}
+{% if 'go' in workstation_languages %}
 go = "1.27.3"
+{% endif %}
+{% if 'bun' in workstation_languages %}
 bun = "1.4.4"
+{% endif %}
+{% if 'php' in workstation_languages %}
 php = "8.5.12"
+{% endif %}
 
 # Shared CLI defaults; project-local versions and lockfiles take precedence.
 uv = "0.13.6"

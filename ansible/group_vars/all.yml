@@ -1,2 +1,5 @@
 workstation_user: "{{ lookup('env', 'USER') }}"
 workstation_home: "{{ lookup('env', 'HOME') }}"
+
+# Direct Ansible applies include all runtimes unless explicitly narrowed.
+workstation_languages: [node, python, go, bun, php]

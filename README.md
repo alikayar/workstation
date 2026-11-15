@@ -35,7 +35,7 @@ The default Ubuntu setup provides these tools; project manifests and lockfiles s
 | Containers | Docker Engine, Compose, Buildx | Run application stacks and build images. |
 | Coding agent | Codex CLI | Managed agent configuration, instructions and command rules. |
 | Code discovery | Graphify, ripgrep, fd, ast-grep | Local repository indexing, text and structural search. |
-| Browser automation | agent-browser, managed Chrome | Task-scoped browser automation; native Chrome on x86_64. |
+| Browser automation | agent-browser, Lightpanda, managed Chrome | Task-scoped automation with Lightpanda by default; explicit Chrome for visual work on x86_64. |
 | Website audits | Lighthouse, SiteOne Crawler | Page measurements and bounded site-wide crawling. |
 | Agent integrations | Serena, Context7 | Code navigation and current library documentation. |
 
