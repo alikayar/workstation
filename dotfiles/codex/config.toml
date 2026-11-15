@@ -26,13 +26,6 @@ url = "https://mcp.context7.com/mcp"
 required = false
 startup_timeout_sec = 20
 
-# Semantic navigation, installed in an isolated uvx environment.
-[mcp_servers.serena]
-command = "uvx"
-args = ["--from", "serena-agent==2.1.0", "serena", "start-mcp-server", "--project-from-cwd", "--context=codex"]
-startup_timeout_sec = 120
-required = false
-
 # Opt-in performance traces. Requires Chrome in the Ubuntu environment.
 [mcp_servers.chrome_devtools]
 command = "npx"

@@ -67,7 +67,6 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | Tool | Purpose | Provisioning | Reference |
 | --- | --- | --- | --- |
 | Context7 MCP | Version-specific library and framework documentation when applicable. | Codex's remote Streamable HTTP MCP configuration, no local package. | [Repository](https://github.com/upstash/context7) |
-| Serena MCP | Symbol/reference navigation for codebases. | Pinned `uvx` package; enabled. | [Repository](https://github.com/oraios/serena) |
 | Chrome DevTools MCP | Chrome tracing, network and memory analysis. | Pinned `npx` package; disabled until needed. | [Repository](https://github.com/ChromeDevTools/chrome-devtools-mcp) |
 | Grafana MCP | Read-only monitoring, log and metric analysis. | Pinned `uvx` package; disabled until configured. | [Repository](https://github.com/grafana/mcp-grafana) |
 | PostgreSQL MCP | Restricted SQL and schema analysis. | Pinned `uvx` package; disabled until configured. | [Repository](https://github.com/crystaldba/postgres-mcp) |
@@ -85,4 +84,4 @@ Engineering skills are managed separately. Workstation provisions tools and agen
 
 APT manages Ubuntu CLI packages; mise pins shared runtimes and standalone tools. Project manifests and lockfiles own project dependencies and validation rules. Use the [verification guide](verification.md) for authorized Workstation checks; installation alone does not authorize execution.
 
-Serena and Context7 are enabled. Chrome DevTools, Grafana and PostgreSQL require explicit session activation; see [MCP guide](mcp.md).
+Context7 is enabled. Chrome DevTools, Grafana and PostgreSQL require explicit session activation; see [MCP guide](mcp.md).

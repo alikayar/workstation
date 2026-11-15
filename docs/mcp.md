@@ -5,7 +5,6 @@ MCP configuration lives in `dotfiles/codex/config.toml` and is installed as `~/.
 | MCP | Default | Intended use | Prerequisites |
 | --- | --- | --- | --- |
 | Context7 | Enabled | Public, version-specific library documentation | Internet; API key not necessary for anonymous access |
-| Serena | Enabled | Symbol and reference navigation | `uvx`; a Git checkout; applicable language servers |
 | Chrome DevTools | Disabled | Performance traces, network and browser debugging | `npx` and Chrome installed **inside Ubuntu** |
 | Grafana | Disabled | Log, metric and dashboard queries | Grafana endpoint and service-account token |
 | PostgreSQL | Disabled | Database schema, restricted SQL and query plans | PostgreSQL connection URI, preferably read-only user |
@@ -32,10 +31,6 @@ Diagram authoring uses the separate draw.io skill plugin, not an MCP server. Ins
 Context7 uses the remote Streamable HTTP endpoint for public, version-specific library documentation; no local server or API key is required for anonymous access. Confirm the active project's installed versions before querying, and prefer official sources where results disagree.
 
 Anonymous access may have lower limits. If authentication is needed, use the provider's documented OAuth/API-key procedure and keep credentials outside tracked files. Do not paste tokens into the managed configuration, which Ansible replaces. Workstation does not provision a Context7 account.
-
-## Serena
-
-Serena runs `serena-agent==2.1.0` through `uvx` with `--context=codex --project-from-cwd`. Start Codex in the active project's Git checkout. For Go, make `gopls` available in the project environment. The first invocation may need to download the pinned package and language-server dependencies.
 
 ## Chrome DevTools
 
@@ -75,9 +70,11 @@ codex -c 'mcp_servers.postgres.enabled=true'
 
 ## Policy and maintenance
 
+Code discovery uses the local Graphify CLI and direct source search; see the [decision and measurements](code-discovery.md).
+
 - Existing project/user restrictions on browser verification, queries, validations, and remote operations still apply. A configured MCP is not permission to inspect customer or production data.
 - Grafana/PostgreSQL remain disabled for ordinary sessions to avoid unnecessary startup and access to sensitive environments.
 - Prefer existing `rg`, `ast-grep`, `gh`, Docker CLI and shell over redundant filesystem, GitHub or Docker MCP servers.
 - Review pinned package upgrades deliberately instead of using floating `latest` tags.
 
-Upstream sources: [Serena](https://oraios.github.io/serena/02-usage/030_clients), [Chrome DevTools](https://github.com/ChromeDevTools/chrome-devtools-mcp), [Grafana](https://grafana.com/docs/grafana/latest/developer-resources/mcp/), [Postgres MCP Pro](https://github.com/crystaldba/postgres-mcp), [Codex configuration](https://developers.openai.com/codex/config-reference).
+Upstream sources: [Chrome DevTools](https://github.com/ChromeDevTools/chrome-devtools-mcp), [Grafana](https://grafana.com/docs/grafana/latest/developer-resources/mcp/), [Postgres MCP Pro](https://github.com/crystaldba/postgres-mcp), [Codex configuration](https://developers.openai.com/codex/config-reference).

@@ -1,0 +1,17 @@
+{
+  "small": {
+    "domains": 3,
+    "modules_per_domain": 16,
+    "fanout": 2
+  },
+  "medium": {
+    "domains": 4,
+    "modules_per_domain": 64,
+    "fanout": 3
+  },
+  "large": {
+    "domains": 8,
+    "modules_per_domain": 128,
+    "fanout": 4
+  }
+}

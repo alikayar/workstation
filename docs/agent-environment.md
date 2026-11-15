@@ -93,6 +93,8 @@ Upstream: [installation](https://agent-browser.dev/installation), [sessions](htt
 
 ## Repository knowledge indexing
 
+Code discovery uses Graphify plus direct source search without a default language-server MCP. The [comparison and decision](code-discovery.md) records the measured tradeoffs.
+
 The `agent_tools` role provides `workstation-graphify` by default (`agent_tools_graphify_enabled: false` skips provisioning without uninstalling an existing tool). Graphify and its separate mise Python runtime are version-pinned in the role defaults and installed in a user-owned uv tool environment. Project runtimes, manifests and lockfiles are unchanged. The workstation must already provide mise and uv; this scoped apply installs only the Graphify environment and launcher:
 
 ```sh

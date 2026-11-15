@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "fixture": "python",
+  "cases": [
+    {
+      "id": "same-name-definitions",
+      "operation": "definitions",
+      "symbol": "calculate_total",
+      "expected_files": [
+        "services/billing.py",
+        "services/shipping.py"
+      ]
+    },
+    {
+      "id": "qualified-definition",
+      "operation": "definitions",
+      "symbol": "calculate_total",
+      "file": "services/billing.py",
+      "expected_files": [
+        "services/billing.py"
+      ]
+    },
+    {
+      "id": "alias-references",
+      "operation": "references",
+      "symbol": "calculate_total",
+      "file": "services/billing.py",
+      "expected_files": [
+        "checkout.py"
+      ],
+      "after_change_files": [
+        "checkout.py",
+        "added_worker.py"
+      ]
+    },
+    {
+      "id": "caller-chain",
+      "operation": "ancestors",
+      "symbol": "calculate_total",
+      "file": "services/billing.py",
+      "max_depth": 3,
+      "expected_files": [
+        "checkout.py",
+        "workers.py",
+        "app.py"
+      ],
+      "after_change_files": [
+        "checkout.py",
+        "workers.py",
+        "app.py",
+        "added_worker.py"
+      ]
+    },
+    {
+      "id": "missing-symbol",
+      "operation": "definitions",
+      "symbol": "nonexistent_discovery_function",
+      "expected_files": []
+    }
+  ],
+  "changes": [
+    {
+      "path": "added_worker.py",
+      "content": "from services.billing import calculate_total as amount_due\n\ndef process_added(amount: int) -> int:\n    return amount_due(amount)\n",
+      "symbol": "process_added"
+    }
+  ]
+}

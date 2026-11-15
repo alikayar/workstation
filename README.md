@@ -37,7 +37,7 @@ The default Ubuntu setup provides these tools; project manifests and lockfiles s
 | Code discovery | Graphify, ripgrep, fd, ast-grep | Local repository indexing, text and structural search. |
 | Browser automation | agent-browser, Lightpanda, managed Chrome | Task-scoped automation with Lightpanda by default; explicit Chrome for visual work on x86_64. |
 | Website audits | Lighthouse, SiteOne Crawler | Page measurements and bounded site-wide crawling. |
-| Agent integrations | Serena, Context7 | Code navigation and current library documentation. |
+| Agent integrations | Context7 | Current library documentation. |
 
 MarkItDown conversion and the Chrome DevTools, Grafana and PostgreSQL MCP integrations are opt-in. See the [full tool inventory](docs/tools.md) for installation details and the [agent environment guide](docs/agent-environment.md) for usage. Installed tools do not start audits or grant permission to run checks.
 
@@ -107,6 +107,7 @@ Start with the guide for your next task. Each topic has one maintained home.
 | Activate an optional server or resolve MCP prerequisites | [MCP integrations](docs/mcp.md) |
 | Understand shell activation and project runtime selection | [Shell](docs/shell.md), [mise/PHP/Composer](docs/mise.md) |
 | Configure host and remote editor defaults | [VS Code](docs/vscode.md) |
+| Understand the code-discovery tooling decision and measurements | [Code discovery comparison](docs/code-discovery.md) |
 | Choose checks and understand CI evidence | [Verification](docs/verification.md) |
 
 ## License
