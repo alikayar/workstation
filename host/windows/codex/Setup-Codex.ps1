@@ -115,11 +115,33 @@ function Set-CodexConfig([string]$Executable, [string]$CodexHome) {
         })
         if ($layers.Count -ne 1) { throw 'Codex did not return one base user configuration layer; no settings were changed.' }
         $layer = $layers[0]
+        # A legacy sandbox_mode can supersede permission profiles from another layer
+        # or a named profile. Preserve that model instead of adding a global override.
+        $usesPermissionProfiles = $false
+        $configs = @($read['config']) + @($read['layers'] | ForEach-Object { $_['config'] })
+        foreach ($config in $configs) {
+            if ($config -isnot [Collections.IDictionary]) { continue }
+            $candidates = @($config)
+            if ($config['profiles'] -is [Collections.IDictionary]) {
+                $candidates += @($config['profiles'].Values)
+            }
+            foreach ($candidate in $candidates) {
+                if ($candidate -isnot [Collections.IDictionary]) { continue }
+                if (-not [string]::IsNullOrWhiteSpace([string]$candidate['default_permissions']) -or
+                    ($candidate['permissions'] -is [Collections.IDictionary] -and $candidate['permissions'].Count -gt 0)) {
+                    $usesPermissionProfiles = $true
+                }
+            }
+        }
         $defaults = [ordered]@{
             'sandbox_mode'='workspace-write'
             'approval_policy'='on-request'
             'features.prefer_mxc'=$true
             'windows.sandbox'='elevated'
+        }
+        if ($usesPermissionProfiles) {
+            $defaults.Remove('sandbox_mode')
+            Write-Host 'Permission profiles detected; preserving them without adding or changing sandbox_mode.'
         }
         $edits = @()
         foreach ($key in $defaults.Keys) {
