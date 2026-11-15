@@ -1,0 +1,18 @@
+Workstation Appearance contains the following third-party material:
+
+Catppuccin Macchiato, Mocha, Frappé and Latte themes from catppuccin/vscode, release catppuccin-vsc-v3.19.0.
+Copyright (c) 2021 Catppuccin. MIT license: licenses/catppuccin-MIT.txt.
+https://github.com/catppuccin/vscode
+The theme names and JSON formatting have been changed; color definitions are retained.
+
+File icon mappings and images from vscode-icons/vscode-icons, release v13.0.0.
+Copyright (c) 2016 Roberto Huertas and the vscode-icons contributors.
+https://github.com/vscode-icons/vscode-icons
+Mappings/source: MIT license, licenses/vscode-icons-MIT.txt.
+Icons: Creative Commons Attribution-ShareAlike 4.0 International,
+licenses/CC-BY-SA-4.0.txt; https://creativecommons.org/licenses/by-sa/4.0/.
+As stated upstream: branded icons are licensed under their copyright license.
+Existing notices embedded in the images are preserved. Image bytes are unchanged;
+only mapping paths have been relocated. No upstream runtime code is included.
+
+The originating release URLs and archive SHA256 values are recorded in package.json.

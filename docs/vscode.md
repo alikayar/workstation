@@ -10,7 +10,7 @@ Run in normal Windows PowerShell from an installed [wvm setup](windows.md#the-wv
 wvm setup vscode
 ```
 
-Setup reuses an existing Stable installation. If absent, it asks before installing the pinned x64 User Setup; No stops before settings or extension changes. It then asks whether to install Remote SSH, Catppuccin and vscode-icons; Enter accepts, `n` skips the bundle. No PowerShell 7 installation is required. Run `wvm setup terminal` separately for PowerShell, Windows Terminal and Starship.
+Setup reuses an existing Stable installation. If absent, it asks before installing the pinned x64 User Setup; No stops before settings or extension changes. It then asks whether to install Remote SSH and the bundled static Workstation appearance; Enter accepts, `n` skips both. Only Remote SSH is downloaded from the Marketplace; appearance files come from this checkout. No PowerShell 7 installation is required. Run `wvm setup terminal` separately for PowerShell, Windows Terminal and Starship.
 
 For Ubuntu remote settings, run from the repository root inside Ubuntu:
 
@@ -30,7 +30,15 @@ The integrated browser uses remote HTTP/HTTPS proxying and workspace storage unl
 
 ## Extensions and appearance
 
-The optional bundle installs Remote SSH, Catppuccin and vscode-icons locally. Different active theme/icon choices use the same override prompt; otherwise Catppuccin Macchiato and vscode-icons are selected. Installed extension IDs and versions are inspected first; existing versions (including disabled extensions) are left alone, and only missing IDs are installed. Other theme/icon extensions are not treated as package conflicts and are not uninstalled. Language-specific extensions are left to the user and project; Ansible tooling belongs in Ubuntu.
+The optional bundle requires VS Code 1.104.0 or newer and installs Remote SSH and the local `workstation-local.appearance` package. An older VS Code installation is retained; update it explicitly or skip the bundle. Different active theme/icon choices use the same override prompt; otherwise Workstation Macchiato and Workstation Icons are selected. Installed extension IDs and versions are inspected first; existing Remote SSH versions (including disabled installations) are left alone. Language-specific extensions are left to the user and project; Ansible tooling belongs in Ubuntu.
+
+The [appearance directory](../host/windows/vscode/appearance/package.json) contains fixed Catppuccin Macchiato, Mocha, Frappé and Latte themes from 3.19.0 and the icon mappings and referenced images from vscode-icons 13.0.0. It declares only theme contributions, with no JavaScript, extension entry points, commands, runtime dependencies or upstream project-detection/customization behavior. SVG images retain their original bytes; icon mapping paths are relocated. Source release URLs and archive SHA256 values are recorded in the manifest. Required attribution and licenses travel with the package; there is no upstream build or download during appearance installation.
+
+Setup copies the package into `%USERPROFILE%\.vscode\extensions\workstation-local.appearance-1.1.0`, staging the complete directory before moving it into place. Linked paths, executable asset types, runtime manifest entries and differing contents at the same installed version are refused. Identical contents are left alone. Restart VS Code after installation so it discovers the local package. Use Preferences: Color Theme to select Workstation Macchiato, Workstation Mocha, Workstation Frappé (dark themes), or Workstation Latte (light theme); Macchiato remains the setup default. This package has a separate identity from the Marketplace themes and does not receive their updates. It reduces third-party runtime/update exposure; it does not sandbox VS Code or remove image/parser risks.
+
+To migrate an existing setup, accept the proposed theme/icon setting replacements when running `wvm setup vscode`, restart VS Code, and confirm that Workstation Macchiato and Workstation Icons display correctly. Then uninstall `catppuccin.catppuccin-vsc` and `vscode-icons-team.vscode-icons` from the local Extensions view. Setup warns if these upstream packages are present but does not remove or disable them automatically. Selecting the local appearance alone does not remove the old packages or their update risk. Other themes and icon extensions are preserved. If an extension allowlist is configured separately, it must permit `workstation-local.appearance`.
+
+For a deliberate appearance update, review the selected upstream release, replace only the required static assets and mapping/theme data, preserve required notices, update provenance and bump the local package version. Setup will install the new version without replacing old package directories; account for and remove superseded local versions explicitly. Do not introduce an upstream installer, runtime code or automatic refresh for these assets.
 
 ## Resource use and privacy
 
@@ -38,7 +46,7 @@ Remote settings exclude `.venv`, `__pycache__` and `.pytest_cache` from watching
 
 Use VS Code Process Explorer while the affected project is open to investigate memory. Include remote extensions, language servers, terminals and development servers in the measurement.
 
-Host defaults disable built-in AI features and VS Code telemetry, hide extension recommendations and vscode-icons version notices, and open Markdown as text. Red Hat telemetry defaults to disabled on both host and remote. Different existing host preferences require explicit override approval; these telemetry settings do not control every third-party extension.
+Host defaults disable built-in AI features and VS Code telemetry, hide extension recommendations, and open Markdown as text. Red Hat telemetry defaults to disabled on both host and remote. Different existing host preferences require explicit override approval; these telemetry settings do not control every third-party extension. Existing obsolete vscode-icons preferences are preserved rather than removed during settings merge.
 
 ## Pinned Windows installation
 

@@ -1,0 +1,62 @@
+{
+  "name": "appearance",
+  "displayName": "Workstation Appearance",
+  "description": "Static Catppuccin color themes and vscode-icons assets; no executable extension code.",
+  "version": "1.1.0",
+  "publisher": "workstation-local",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "extensionKind": [
+    "ui"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "Workstation Macchiato",
+        "uiTheme": "vs-dark",
+        "path": "./themes/catppuccin-macchiato.json"
+      },
+      {
+        "label": "Workstation Mocha",
+        "uiTheme": "vs-dark",
+        "path": "./themes/catppuccin-mocha.json"
+      },
+      {
+        "label": "Workstation Frappé",
+        "uiTheme": "vs-dark",
+        "path": "./themes/catppuccin-frappe.json"
+      },
+      {
+        "label": "Workstation Latte",
+        "uiTheme": "vs",
+        "path": "./themes/catppuccin-latte.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "workstation-icons",
+        "label": "Workstation Icons",
+        "path": "./icons/icon-theme.json"
+      }
+    ]
+  },
+  "workstationSources": [
+    {
+      "project": "catppuccin/vscode",
+      "release": "catppuccin-vsc-v3.19.0",
+      "url": "https://github.com/catppuccin/vscode/releases/download/catppuccin-vsc-v3.19.0/catppuccin-vsc-3.19.0.vsix",
+      "sha256": "ebf347664837edbe91c9920ff3d14c96d4a28beeec0b95137c76058326329780"
+    },
+    {
+      "project": "vscode-icons/vscode-icons",
+      "release": "v13.0.0",
+      "url": "https://github.com/vscode-icons/vscode-icons/releases/download/v13.0.0/vscode-icons-13.0.0.vsix",
+      "sha256": "0f38ea41a7a9395d79d2ca712b5930009416fa609b9a77f9eb90247125258983"
+    }
+  ]
+}

@@ -83,7 +83,7 @@ function Read-ExtensionChoice([string]$Choice) {
     if ($Choice -eq 'Install') { return $true }
     if ($Choice -eq 'Skip') { return $false }
     do {
-        $answer = (Read-Host 'Install recommended extensions (Remote SSH, Catppuccin, vscode-icons)? [Y/n]').Trim()
+        $answer = (Read-Host 'Install Remote SSH and the bundled static Workstation appearance? [Y/n]').Trim()
     } while ($answer -notmatch '^(|y|yes|n|no)$')
     return $answer -match '^(|y|yes)$'
 }
@@ -183,9 +183,74 @@ function Get-VSCodeExtensions([string]$CodePath) {
     }
     return $installed
 }
+function Install-WorkstationAppearance {
+    $source = Join-Path $PSScriptRoot 'appearance'
+    $extensionsRoot = Join-Path $HOME '.vscode\extensions'
+    # Refuse linked ancestors as well as linked package contents before copying.
+    foreach ($root in @($source, $extensionsRoot)) {
+        $cursor = $root
+        while ($cursor) {
+            if ((Test-Path -LiteralPath $cursor) -and ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "Linked appearance path retained: $cursor"
+            }
+            $cursor = [IO.Path]::GetDirectoryName($cursor)
+        }
+    }
+    $items = @(Get-ChildItem -LiteralPath $source -Recurse -Force)
+    foreach ($item in $items) {
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or (-not $item.PSIsContainer -and $item.Extension -notin @('.json', '.svg', '.png', '.txt'))) {
+            throw "Unexpected appearance asset: $($item.FullName)"
+        }
+    }
+    $manifest = Read-Settings ([IO.File]::ReadAllText((Join-Path $source 'package.json')))
+    if ($manifest['publisher'] -cne 'workstation-local' -or $manifest['name'] -cne 'appearance' -or $manifest['version'] -cnotmatch '^\d+\.\d+\.\d+$') {
+        throw 'Unexpected Workstation appearance identity.'
+    }
+    foreach ($key in @('main', 'browser', 'scripts', 'dependencies', 'extensionDependencies', 'extensionPack', 'activationEvents')) {
+        if ($manifest.Contains($key)) { throw "Static appearance must not declare $key." }
+    }
+    $files = @($items | Where-Object { -not $_.PSIsContainer })
+    $destination = Join-Path $extensionsRoot ('workstation-local.appearance-' + $manifest['version'])
+    if (Test-Path -LiteralPath $destination) {
+        $existing = Get-Item -LiteralPath $destination -Force
+        if (-not $existing.PSIsContainer -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Existing appearance destination is not an independent directory; retained.'
+        }
+        $installedItems = @(Get-ChildItem -LiteralPath $destination -Recurse -Force)
+        if (@($installedItems | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count -or
+            @($installedItems | Where-Object { -not $_.PSIsContainer }).Count -ne $files.Count) {
+            throw 'Existing appearance contents differ; retained for review.'
+        }
+        foreach ($file in $files) {
+            $relative = $file.FullName.Substring($source.Length + 1)
+            $target = Join-Path $destination $relative
+            if (-not (Test-Path -LiteralPath $target -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $target).Hash -cne (Get-FileHash -LiteralPath $file.FullName).Hash) {
+                throw 'Existing appearance contents differ; retain them and bump the bundled version for a deliberate update.'
+            }
+        }
+        Write-Host 'Workstation Appearance is already installed with identical contents.'
+        return
+    }
+    New-Item -ItemType Directory -Path $extensionsRoot -Force | Out-Null
+    $staging = Join-Path $extensionsRoot ('.workstation-appearance-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $staging | Out-Null
+    try {
+        foreach ($file in $files) {
+            $target = Join-Path $staging $file.FullName.Substring($source.Length + 1)
+            New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $target
+        }
+        # Directory.Move refuses a destination created concurrently; never overwrite it.
+        [IO.Directory]::Move($staging, $destination)
+    } finally {
+        if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    }
+    Write-Host 'Installed static Workstation Appearance from this checkout. Restart VS Code to load it.'
+}
 function Install-VSCodeExtensions([string]$CodePath, [Collections.IDictionary]$Installed) {
     $added = @()
-    foreach ($extension in @('ms-vscode-remote.remote-ssh','vscode-icons-team.vscode-icons','catppuccin.catppuccin-vsc')) {
+    foreach ($extension in @('ms-vscode-remote.remote-ssh')) {
         if ($Installed.Contains($extension)) {
             Write-Host "Extension already installed: $extension ($($Installed[$extension])). Keeping this version."
             continue
@@ -210,6 +275,9 @@ $installed = Initialize-VSCode
 if (-not $installed) { return }
 $codePath = $installed.CodePath
 $installExtensions = Read-ExtensionChoice $Extensions
+if ($installExtensions -and [version]$installed.Version -lt [version]'1.104.0') {
+    throw 'Workstation Appearance requires VS Code 1.104.0 or newer. Update VS Code explicitly or skip the optional bundle.'
+}
 $installedExtensions = if ($installExtensions) { Get-VSCodeExtensions $codePath } else { @{} }
 $path = Join-Path $env:APPDATA 'Code\User\settings.json'
 $directory = Split-Path -Parent $path
@@ -220,11 +288,19 @@ if ($current -isnot [Collections.IDictionary]) { throw 'VS Code settings must be
 $before = ConvertTo-Json -InputObject $current -Depth 100
 $defaults = Read-Settings ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'settings.json')))
 if ($installExtensions) {
-    $defaults['workbench.colorTheme'] = 'Catppuccin Macchiato'
-    $defaults['workbench.iconTheme'] = 'vscode-icons'
+    $defaults['workbench.colorTheme'] = 'Workstation Macchiato'
+    $defaults['workbench.iconTheme'] = 'workstation-icons'
 }
 Merge-VSCodeSettings $current $defaults
-if ($installExtensions) { Install-VSCodeExtensions $codePath $installedExtensions }
+if ($installExtensions) {
+    Install-WorkstationAppearance
+    Install-VSCodeExtensions $codePath $installedExtensions
+    foreach ($extension in @('catppuccin.catppuccin-vsc', 'vscode-icons-team.vscode-icons')) {
+        if ($installedExtensions.Contains($extension)) {
+            Write-Warning "Upstream extension retained: $extension. After confirming the local appearance, uninstall it in VS Code to stop its code and updates."
+        }
+    }
+}
 $updated = ConvertTo-Json -InputObject $current -Depth 100
 if ($updated -cne $before) {
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
@@ -239,4 +315,4 @@ if ($updated -cne $before) {
         else { [IO.File]::Move($temporary, $path) }
     } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary } }
 }
-Write-Host 'VS Code setup completed. Reopen integrated terminals.'
+Write-Host 'VS Code setup completed. Restart VS Code after appearance installation; reopen integrated terminals.'

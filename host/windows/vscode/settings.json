@@ -16,7 +16,6 @@
   "chat.disableAIFeatures": true,
   "telemetry.telemetryLevel": "off",
   "redhat.telemetry.enabled": false,
-  "vsicons.dontShowNewVersionMessage": true,
   "workbench.editorAssociations": {
     "*.md": "default"
   }
