@@ -63,7 +63,6 @@ enabled = false
 startup_timeout_sec = 120
 required = false
 
-# Keep the reviewed marketplace identity with the default configuration.
 [marketplaces.drawio]
 source_type = "git"
 source = {{ codex_drawio_marketplace | to_json }}

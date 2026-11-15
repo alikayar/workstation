@@ -63,6 +63,7 @@
     owner: "{{ workstation_user }}"
     group: "{{ workstation_user }}"
     mode: '0644'
+  tags: [mise_config]
 
 - name: Check whether configured mise tools are installed
   become: false
@@ -116,4 +117,3 @@
   # Rebuild derived command links; tool/config changes are reported above.
   changed_when: false
   when: not ansible_check_mode
-

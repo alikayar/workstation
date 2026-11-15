@@ -5,7 +5,7 @@ Run checks from the repository root only when their scope is authorized. Source 
 | Level | Command or trigger | Effects and evidence |
 | --- | --- | --- |
 | Source checks | Commands below; automatic `checks` CI job on relevant PRs and pushes to `main` | Ansible syntax/lint and Python test-script syntax. No provisioning or browser startup. |
-| Isolated regressions | `python3 tests/regressions.py` | Executes actual Ansible tasks in private disposable homes; verifies rendered browser guards and Codex configuration. Does not replace the user's settings. |
+| Isolated regressions | `python3 tests/regressions.py` | Executes actual Ansible tasks in private disposable homes; verifies runtime selection, component/dependency scope, rendered browser guards and Codex configuration. Does not replace the user's settings. |
 | Installed-tool regressions | Add `--installed-tools` on a prepared VM | Also exercises SiteOne extraction/custom paths and Lighthouse failure/recovery using native tools. May download pinned vendor packages; no application services or browser execution. |
 | Full Ubuntu install | Manually dispatch `CI` on the selected revision | Existing Ubuntu 24.04/26.04 x86_64 jobs provision disposable hosted runners, require `changed=0` on a second apply and run installed-tool regressions. |
 | Browser smoke | `python3 tests/browser_smoke.py`, or select the manual CI `browser` input | Starts one temporary loopback fixture, exercises agent-browser, Lighthouse and SiteOne sequentially, saves screenshots/native reports and closes owned resources. No external target site. |
@@ -37,9 +37,9 @@ The tests use Python 3.11+ standard-library `unittest` and the installed Ansible
 python3 tests/regressions.py --installed-tools
 ```
 
-The suite verifies successful setup and unchanged reapplication, user-file and foreign/broken-symlink collisions, both browser wait-state spellings and forbidden session/state overrides. Installed-tool tests seed an incomplete executable or inject an install-command failure, then verify the actual tasks recover and only mark successful completion. Dependency failure injection is separate from the subsequent real npm repair; it does not claim to reproduce a network outage.
+The suite verifies selected-runtime rendering (including no languages), component tags and required dependencies, successful setup and unchanged reapplication, ownership collisions, both browser wait-state spellings and forbidden session/state overrides. Installed-tool tests seed an incomplete executable or inject an install-command failure, then verify the actual tasks recover and only mark successful completion. Dependency failure injection is separate from the subsequent real npm repair; it does not claim to reproduce a network outage.
 
-Without `--installed-tools`, those two installation tests are explicitly reported as skipped. Test logs and a machine-readable `result.json` remain in the printed private `/tmp/ws-regressions-*` directory after success or failure. `--output PATH` selects a new or empty artifact directory. Preserve failures before retrying; do not reuse a nonempty output directory or delete evidence to obtain a clean result.
+Without `--installed-tools`, plugin-registration and tool-installation checks are explicitly reported as skipped. Test logs and a machine-readable `result.json` remain in the printed private `/tmp/ws-regressions-*` directory after success or failure. `--output PATH` selects a new or empty artifact directory. Preserve failures before retrying; do not reuse a nonempty output directory or delete evidence to obtain a clean result.
 
 ## Explicit browser smoke
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise Workstation tasks in disposable homes; never apply the full playbook."""
 import argparse
+import base64
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -59,6 +61,59 @@ class Regressions(unittest.TestCase):
         if unchanged:
             self.assertRegex(result.stdout, r'localhost\s*:\s*ok=\d+\s+changed=0\b', str(log))
         return result
+
+    def test_runtime_selection(self):
+        config = self.home / '.config/mise'
+        config.mkdir(parents=True)
+        for languages in [[], ['node', 'python'], ['php'], ['node', 'python', 'go', 'bun', 'php']]:
+            with self.subTest(languages=languages):
+                values = {
+                    'workstation_languages': languages,
+                    'mise_config_dir': str(config),
+                    'mise_config_src': str(ROOT / 'dotfiles/mise/config.toml'),
+                }
+                self.apply('mise', values, tags='mise_config')
+                tools = tomllib.loads((config / 'config.toml').read_text())['tools']
+                self.assertEqual(set(tools) & {'node', 'python', 'go', 'bun', 'php'}, set(languages))
+                self.assertTrue({'uv', 'ruff', 'aqua:cli/cli', 'aqua:BurntSushi/ripgrep'} <= set(tools))
+                self.apply('mise', values, tags='mise_config', unchanged=True)
+
+    def test_workstation_component_scope(self):
+        path = ROOT / 'host/windows/hyperv/ubuntu-26-04/configure-workstation.py'
+        spec = importlib.util.spec_from_file_location('workstation_bootstrap', path)
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        base = {'git_user_name': 'Fixture', 'git_user_email': 'fixture@example.invalid'}
+        core_tags = {'shell', 'git', 'mise', 'cli_tools'}
+        cases = [
+            ([], [], set()),
+            (['php'], [], set()),
+            ([], ['browser'], {'agent_browser'}),
+            (['node'], ['audit'], {'agent_browser', 'lighthouse', 'siteone'}),
+            (['node', 'python'], ['codex'], {'codex'}),
+            (['python'], ['markitdown'], {'markitdown'}),
+            (['node', 'python', 'go', 'bun', 'php'],
+             ['codex', 'docker', 'vscode', 'browser', 'audit', 'graphify', 'markitdown'],
+             {'codex', 'docker', 'vscode', 'agent_browser', 'lighthouse', 'siteone', 'graphify', 'markitdown'}),
+        ]
+        for languages, components, optional_tags in cases:
+            with self.subTest(languages=languages, components=components):
+                encoded = base64.b64encode(json.dumps({**base, 'languages': languages, 'components': components}).encode())
+                settings, tags = runner.read_configuration(encoded)
+                self.assertEqual(settings['workstation_languages'], languages)
+                self.assertEqual(set(tags), core_tags | optional_tags)
+                self.assertEqual(len(tags), len(set(tags)))
+                self.assertEqual(settings['agent_tools_markitdown_enabled'], 'markitdown' in components)
+                self.assertNotIn('components', settings)
+        for overrides in [
+            {'languages': ['unknown']}, {'languages': 'python'}, {'components': ['unknown']},
+            {'components': 'codex'}, {'components': ['codex'], 'languages': ['node']},
+            {'components': ['audit']}, {'components': ['markitdown']}, {'unexpected': True},
+        ]:
+            with self.subTest(invalid=overrides):
+                payload = {**base, 'languages': [], 'components': [], **overrides}
+                with self.assertRaises(RuntimeError):
+                    runner.read_configuration(base64.b64encode(json.dumps(payload).encode()))
 
     def test_browser_wrapper_guards(self):
         native = self.base / 'native'

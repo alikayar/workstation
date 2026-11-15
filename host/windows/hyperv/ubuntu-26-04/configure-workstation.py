@@ -41,15 +41,7 @@ def sudo(password, *command):
     )
 
 
-def apply(bundle, expected_hash, installation_id, encoded_settings):
-    if os.geteuid() == 0:
-        raise RuntimeError("Run Workstation as the development user, not root")
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    os.umask(0o077)
-    if Path("/etc/workstation-bootstrap-id").read_text().strip() != installation_id:
-        raise RuntimeError("Guest installation identity differs")
-    if hashlib.sha256(bundle.read_bytes()).hexdigest() != expected_hash:
-        raise RuntimeError("Uploaded Workstation source hash differs")
+def read_configuration(encoded_settings):
     settings = json.loads(base64.b64decode(encoded_settings))
     if not isinstance(settings, dict) or set(settings) != {"git_user_name", "git_user_email", "components", "languages"}:
         raise RuntimeError("Unexpected configuration settings")
@@ -84,6 +76,19 @@ def apply(bundle, expected_hash, installation_id, encoded_settings):
         tags.extend(optional_tags[component])
     settings["workstation_languages"] = languages
     settings["agent_tools_markitdown_enabled"] = "markitdown" in components
+    return settings, list(dict.fromkeys(tags))
+
+
+def apply(bundle, expected_hash, installation_id, encoded_settings):
+    if os.geteuid() == 0:
+        raise RuntimeError("Run Workstation as the development user, not root")
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    os.umask(0o077)
+    if Path("/etc/workstation-bootstrap-id").read_text().strip() != installation_id:
+        raise RuntimeError("Guest installation identity differs")
+    if hashlib.sha256(bundle.read_bytes()).hexdigest() != expected_hash:
+        raise RuntimeError("Uploaded Workstation source hash differs")
+    settings, tags = read_configuration(encoded_settings)
     # Keep each run separate from user repositories and earlier interrupted runs.
     parent = Path.home() / ".local/share/workstation/provision"
     parent.mkdir(parents=True, exist_ok=True)
@@ -104,7 +109,7 @@ def apply(bundle, expected_hash, installation_id, encoded_settings):
             # Ansible's "-" password source reads stdin; no password file or argv value.
             subprocess.run(
                 ["ansible-playbook", "ansible/site.yml",
-                 "--become-password-file", "-", "--tags", ",".join(dict.fromkeys(tags)),
+                 "--become-password-file", "-", "--tags", ",".join(tags),
                  "--extra-vars", f"@{variables}"],
                 cwd=source, env=environment, input=password + b"\n", check=True,
             )
