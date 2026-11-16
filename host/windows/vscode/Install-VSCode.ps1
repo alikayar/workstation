@@ -96,10 +96,16 @@ function ConvertTo-SettingsMap($Value) {
         foreach ($item in $Value) { $items.Add((ConvertTo-SettingsMap $item)) }
         return ,$items.ToArray()
     }
-    if ($type -eq 'System.Management.Automation.PSCustomObject' -or $type -eq 'Newtonsoft.Json.Linq.JObject') {
+    if ($type -eq 'Newtonsoft.Json.Linq.JObject') {
         $map = [ordered]@{}
-        $properties = if ($type -eq 'Newtonsoft.Json.Linq.JObject') { $Value.Properties() } else { $Value.PSObject.Properties }
-        foreach ($property in $properties) { $map[$property.Name] = ConvertTo-SettingsMap $property.Value }
+        # Enumerate directly: sending a single JProperty through the PowerShell
+        # pipeline can unwrap its child tokens and lose the property name.
+        foreach ($property in $Value.Properties()) { $map[$property.Name] = ConvertTo-SettingsMap $property.Value }
+        return $map
+    }
+    if ($type -eq 'System.Management.Automation.PSCustomObject') {
+        $map = [ordered]@{}
+        foreach ($property in $Value.PSObject.Properties) { $map[$property.Name] = ConvertTo-SettingsMap $property.Value }
         return $map
     }
     return $Value

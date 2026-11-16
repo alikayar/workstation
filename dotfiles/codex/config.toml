@@ -4,11 +4,7 @@ model_verbosity = "low"
 web_search = "live"
 
 sandbox_mode = "danger-full-access"
-approval_policy = { granular = {
-  sandbox_approval = false,
-  rules = true,
-  mcp_elicitations = false
-} }
+approval_policy = { granular = { sandbox_approval = false, rules = true, mcp_elicitations = false } }
 
 [plugins."visualize@openai-bundled"]
 enabled = true

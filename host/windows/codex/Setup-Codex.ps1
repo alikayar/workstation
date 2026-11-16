@@ -102,7 +102,13 @@ function Set-CodexConfig([string]$Executable, [string]$CodexHome) {
     $process.StartInfo = $start
     $started = $false
     try {
-        if (-not $process.Start()) { throw 'Cannot start Codex config API.' }
+        # .NET Framework derives redirected stdin's encoding from the console.
+        # Capture BOM-free UTF-8 when creating the writer, then restore the host.
+        $inputEncoding = [Console]::InputEncoding
+        try {
+            [Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+            if (-not $process.Start()) { throw 'Cannot start Codex config API.' }
+        } finally { [Console]::InputEncoding = $inputEncoding }
         $started = $true
         # Drain stderr without logging it: third-party config may contain private values.
         $stderr = $process.StandardError.ReadToEndAsync()
