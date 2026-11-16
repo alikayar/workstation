@@ -20,10 +20,10 @@ The [browser guide](browser.md) owns operational behavior; this page owns its ve
 
 | Boundary | Current evidence | Remaining work |
 | --- | --- | --- |
-| Linux configuration and helpers | Prepared VM: 21/21 without skips; hosted source run: 18 passed, 3 declared installed-tool skips | Full installation/idempotency and live security-role application remain separate |
-| Chrome/MCP integration | Local standalone smoke and battle normal/SIGTERM/restart phases passed | Hosted fresh-install/browser run; screenshot review for each new visual claim |
+| Linux configuration and helpers | Prepared VM: 21/21 without skips; hosted source run: 18 passed, 3 declared installed-tool skips | Live Hyper-V/WSL and non-x86_64 coverage remain separate |
+| Chrome/MCP integration | Local and hosted Ubuntu 24.04/26.04 battle phases passed | Screenshot review for each new visual claim; no general sandbox guarantee |
 | Windows host/VM contracts | 41/41 passed in each hosted PowerShell 5.1/7 job, no skips | Live Hyper-V image/clone/recovery validation remains separate |
-| Fresh Ubuntu install/idempotency | Manual Ubuntu matrix configured | Current revision's hosted full install and second-apply result |
+| Fresh Ubuntu install/idempotency | Both x86_64 runners provisioned successfully; second apply `changed=0`; 21/21 regressions per OS | Live Hyper-V image/recovery and WSL installation remain separate |
 | Hyper-V images/clones/recovery | Source review and authored isolated contracts; older bounded network evidence is documented separately | Fresh live image/clone/recovery validation for both guests |
 
 This table records the prepared work and observed local runs, not the status badge of an unexecuted workflow. The [Windows network evidence](windows.md#network-validation-evidence) predates the current image/clone changes and does not validate those changes. Retain each run's result/artifacts with its tested source revision.
@@ -101,6 +101,23 @@ This suite does not build an image, boot a guest, mount a real VHD, install host
 The first [hosted attempt](https://github.com/alikayar/workstation/actions/runs/43845325532) exposed a Terminal assertion counting its own harness log, nested Newtonsoft property enumeration on PowerShell 7 and config API stdin encoding on PowerShell 5.1. A [diagnostic attempt](https://github.com/alikayar/workstation/actions/runs/43845784919) confirmed the latter two after fixture isolation was corrected. The production fixes enumerate JObject properties directly and initialize redirected stdin with BOM-free UTF-8 while restoring the host console encoding. Failed attempts remain separate evidence; no scenario was skipped to obtain the passing result.
 
 The automatic Ubuntu source job also exposed Python 3.12's TOML 1.0 parser rejecting multiline inline tables accepted by the newer local interpreter. The same granular permission values now use a TOML 1.0-compatible inline table. The [automatic source run 43846159821](https://github.com/alikayar/workstation/actions/runs/43846159821) then passed source checks and the standard suite: 18 passed, zero failures/errors and three declared installed-tool skips. A separate prepared-VM run under system Python 3.12.3 passed all 21 with no skips. These source/contract outcomes do not establish Windows desktop installation, live Hyper-V isolation or a fresh Ubuntu provisioning pass.
+
+## Hosted full CI evidence: 2026-11-16
+
+[Full run 43849720570](https://github.com/alikayar/workstation/actions/runs/43849720570) passed every job on implementation commit `0e1cdf6`, with `scope=all`, `browser=true` and `browser_battle=true`. The run includes real provisioning on disposable GitHub-hosted x86_64 Ubuntu runners; the current development VM was not reprovisioned.
+
+| Runner | Provisioning | Second apply | Installed-tool regressions | Browser battle |
+| --- | --- | --- | --- | --- |
+| Ubuntu 24.04 | Passed | `ok=96 changed=0 failed=0` | 21/21, no skips | Normal, SIGTERM and restart passed |
+| Ubuntu 26.04 | Passed | `ok=97 changed=0 failed=0` | 21/21, no skips | Normal, SIGTERM and restart passed |
+
+The Windows PowerShell 5.1 and PowerShell 7 jobs each passed 41/41 without skips in the same run. Source checks passed; the standard source-only regression job intentionally skips its three installed-tool cases, which the Ubuntu installation jobs exercise separately.
+
+Both browser reports mark complete, show a stopped fixture server, no remaining observed owned PIDs and no forced descendant cleanup across all three phases. The negative artifact-path case was rejected outside the declared MCP root. Native trace/audit reports were retained. Normal-phase desktop/mobile screenshots from both Ubuntu runners were visually inspected without clipping or horizontal overflow. Runtime versions were Python 3.15.2, Node 26.13.0, Chrome 157.0.8103.38, MCP 1.12.0 and bundled Lighthouse 13.5.0. Hosted artifacts retain the exact workload source hashes, per-case outcomes, native reports and cleanup evidence for the tested commit.
+
+The first [full attempt](https://github.com/alikayar/workstation/actions/runs/43847157503) exposed `/run/sshd` missing before OpenSSH policy validation on Ubuntu 24.04, and the test MCP client's absent roots capability when GitHub's artifact directory lay outside the OS temp root. The security role now prepares the standard runtime directory and explicitly starts SSH after validated policy installation. The client advertises only its private attempt artifact root; unrestricted-path access was not enabled. The intermediate [SSH-fixed attempt](https://github.com/alikayar/workstation/actions/runs/43848925258) retained the old client and its expected root failure. All failed attempts remain distinct from the passing run.
+
+These hosted checks establish the declared provisioning, idempotency, isolated-contract and bounded-browser workflows. They do not create Hyper-V images/clones, exercise live guest-to-host network isolation, establish a complete WSL install or prove production capacity/sandbox security.
 
 ## Browser setup and execution
 
