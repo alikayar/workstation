@@ -12,7 +12,7 @@ The `codex` role installs a missing user-level CLI and manages its Ubuntu config
 | [AGENTS.md](../dotfiles/codex/AGENTS.md) | `~/.codex/AGENTS.md` | Portable development instructions and tool entry points. |
 | [default.rules](../dotfiles/codex/rules/default.rules) | `~/.codex/rules/default.rules` | Command safeguards for potentially destructive operations. |
 
-The role owns these complete files. Review [configuration ownership and source overrides](getting-started.md#configuration-ownership) before applying over personal settings. Credentials and authentication state are not provisioned. Workstation does not install or update personal/shared engineering skills.
+The role owns these complete files. Review [configuration ownership and source overrides](maintenance.md#configuration-ownership) before applying over personal settings. Credentials and authentication state are not provisioned. Workstation does not install or update personal/shared engineering skills.
 
 The default VM sandbox is `danger-full-access`. Its granular policy disables sandbox-approval prompts and MCP elicitations while retaining command-rule decisions. Explicit task authorization in instructions still applies; this configuration does not enforce confinement to a repository. Host Codex has different defaults; see [security boundaries](security.md).
 

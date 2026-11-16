@@ -36,7 +36,7 @@ Browser execution requires task authorization. Use only the VM-local managed MCP
 4. On success, failure or cancellation, stop any performance trace or screencast started by this task and close all pages it created using `close_page`. Do not close pre-existing or other tasks' pages, kill shared processes or stop another task's recordings. Coordinate concurrent tracing/recording work rather than assuming contexts isolate every diagnostic facility.
 5. Report incomplete cleanup with the owned page IDs and recording state. The client owns the stdio MCP process and its browser lifetime. Closing task pages does not establish browser-process shutdown or immediate context-memory reclamation. There is no managed five-minute idle timeout or replacement cleanup daemon.
 
-The tool does not allow closing the browser's last page. Leave the initial blank page available and create task pages separately; do not turn a cleanup error into shutting down a shared browser. These ownership rules are instructions, not an enforced per-task permission boundary. The bounded Workstation lifecycle scenarios passed locally; the [verification guide](verification.md#local-evidence-2026-11-16) records the evidence and limits.
+The tool does not allow closing the browser's last page. Leave the initial blank page available and create task pages separately; do not turn a cleanup error into shutting down a shared browser. These ownership rules are instructions, not an enforced per-task permission boundary.
 
 ## Audits and performance
 
@@ -63,10 +63,8 @@ The MCP can inspect page content and run page JavaScript; outputs may be process
 | Native audit lacks a performance score | This workflow excludes Lighthouse's performance category; use traces for diagnosis or a project-owned score runner |
 | Entire-site coverage requested | A native page audit is bounded to the page/state; declare a separately scoped project crawler rather than presenting it as a full crawl |
 
-The [verification guide](verification.md) owns exact smoke/battle commands, offline cache handling and cleanup acceptance. The consuming project owns its own long-lived E2E suite and private artifact locations.
-
 ## References and verification
 
 The versioned [tool reference](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/chrome-devtools-mcp-v1.12.0/docs/tool-reference.md) owns exact arguments and tool capabilities; [MCP configuration](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/chrome-devtools-mcp-v1.12.0/docs/configuration.md) owns server options. The Chrome namespace policy follows [Chromium's AppArmor guidance](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
 
-This guide reflects source configuration and upstream contracts. The configuration regressions and real Chrome/MCP smoke/battle scenarios are described in [verification](verification.md); bounded local and hosted Ubuntu 24.04/26.04 full-install/battle runs passed, with their exact tested revision and cleanup evidence recorded there. No automatic uninstall or migration tasks are included.
+Use the [verification guide](verification.md) for smoke/battle commands, prerequisites and acceptance criteria, and its [recorded results](verification.md#recorded-results-2026-11-16) for tested revisions and limits.

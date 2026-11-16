@@ -1,6 +1,6 @@
 # Maintain and update Workstation
 
-Use this guide when changing the workstation definition or reviewing a dependency proposal. [Ubuntu updates](getting-started.md#update-an-existing-workstation) own machine apply/recovery commands; [Windows recovery](windows.md#recovery-compatibility-and-validation) owns VM/image state. Updating source, updating an installed tool and proving the new behavior are separate operations.
+Use this guide when changing the workstation definition or reviewing a dependency proposal. The [Ubuntu update procedure](#update-an-existing-workstation) below owns machine apply/recovery commands; [Windows recovery](hyperv.md#recovery-compatibility-and-validation) owns VM/image state. Updating source, updating an installed tool and proving the new behavior are separate operations.
 
 ## Version policy
 
@@ -45,10 +45,66 @@ See Renovate's [regex manager](https://docs.renovatebot.com/modules/manager/rege
 
 A pin can protect a reviewed source identity without locking every transitive dependency. Keep checksum-coupled updates manual until their complete update mechanism is reviewed. Do not add fallback installers, migration paths or silently switch products to make an upgrade appear successful.
 
-## Roll out and recover
+## Update an existing workstation
 
-For Ubuntu, review the changes from the recorded prior commit, preview the relevant scope, apply it and open a new shell/agent session where required. Follow [configuration ownership](getting-started.md#configuration-ownership) before replacing full files. Ansible check mode is a preview and may not exercise downloads, extraction or tool startup. A clean source checkout does not mean machine state has been backed up.
+Run from this checkout inside Ubuntu. Keep application work in its own repositories. Start with a clean Workstation checkout; if `git status --short` shows edits, finish or preserve them explicitly before updating. Do not stash/reset them automatically. Record the current commit and branch so there is a known source revision to return to:
 
-For Windows, the launcher executes its linked checkout, while in-progress builds/clones retain their recorded payload identities. Rerunning launcher installation updates the forwarding files; it does not upgrade VMs or rebuild published bases. Recipe changes select new versioned images. Do not edit an in-progress recovery record or delete its payload to force it onto newer source.
+```sh
+git status --short
+git rev-parse HEAD
+git branch --show-current
+git pull --ff-only
+```
 
-Stop on checksum, ownership, identity or concurrent-write failures. Preserve records, disks, logs and the previous working source. Choose the component's documented recovery path; do not reset the repository, erase a tool cache or recreate the development VM as routine repair. Full rollback may require a separately prepared machine backup/checkpoint because reverting a Git commit cannot restore application data or overwritten user files.
+Review the diff from the recorded commit to `HEAD`, especially defaults, task behavior and configuration sources. For example, replace `PREVIOUS_COMMIT` with the recorded hash:
+
+```sh
+git diff --stat PREVIOUS_COMMIT..HEAD
+git diff PREVIOUS_COMMIT..HEAD -- ansible dotfiles
+```
+
+Choose the relevant scope rather than applying everything for a documentation-only update:
+
+| Changed component | Apply tag | State it manages |
+| --- | --- | --- |
+| Shell/default CLI | `shell` / `cli_tools` | Zsh/Starship files, packages, aliases and selected binaries; CLI collisions stop for ownership review. |
+| Runtimes/PHP/Composer | `runtimes` | PHP build prerequisites, managed mise configuration, pinned runtimes and Composer. Project lockfiles stay authoritative. |
+| Git | `git` | Managed `~/.gitconfig`; existing content receives an Ansible backup. |
+| Codex settings only | `codex_config` | Replaces the complete `~/.codex/config.toml` from the configured source, including rendered browser paths. |
+| All Codex defaults | `codex` | Also replaces global AGENTS and command rules and manages the pinned plugin. |
+| Chrome/Graphify | `chrome`, `graphify` | Managed Chrome or repository indexer; Chrome setup may change libraries/AppArmor policy. |
+| Docker | `docker` | Repository, packages, service and optional Docker-group membership. |
+
+On a prepared VM, preview then apply the chosen tag; this example updates Chrome and the managed Codex integration:
+
+```sh
+ansible-playbook ansible/site.yml --tags chrome,codex --check --diff --ask-become-pass
+ansible-playbook ansible/site.yml --tags chrome,codex --ask-become-pass
+```
+
+Check mode is a preview, not proof that downloads, extraction or a live tool will work. Standalone tool tags require their documented prerequisites; use the [browser guide](browser.md) and [agent environment](agent-environment.md) for prerequisites. For a change spanning roles, review and apply the full playbook. Choose authorized [verification](verification.md) for the affected behavior; repeated apply should report `changed=0`. Open a new shell for shell/group changes and a new Codex session for configuration changes.
+
+### Configuration ownership
+
+This setup owns complete files, not only selected keys. A `codex_config` or `codex` apply replaces existing Codex user settings; `codex` also replaces `~/.codex/AGENTS.md` and `rules/default.rules`. Review the intended sources before applying. If personal instructions/settings must remain independent, select maintained source overrides (`codex_config_src`, `codex_agents_src`, `codex_rules_src`) through the ignored host variables, or omit the Codex scope deliberately. The config source is rendered as a template without appending tables. The default template owns the draw.io marketplace identity; a custom source owns its complete content, including marketplace registration when the plugin scope is used. Do not put credentials in managed sources or assume an Ansible backup exists for Codex files. Existing personal/shared skills are never installed or modified by Workstation.
+
+Shell and Git tasks have their own backup behavior; VS Code merges its selected settings. Consult each role before assuming a whole-machine merge or rollback. For changes that require restoring previous system/user state, arrange a VM checkpoint or approved backup with your existing VM manager before applying. No checkpoint or private-file backup is created by these update commands.
+
+### Recover from a failed update
+
+Keep the checkout, ignored host variables, VM and application data intact. Read the failing task and preserve its output. A download/checksum failure or an unrelated-file ownership error is a stop condition; do not delete user files or bypass the guard. Fix the cause and repeat only the relevant scope. An interrupted Chrome extraction is retried by its task; a success marker is written only after extraction finishes.
+
+If the new source behavior is unsuitable, first ensure the checkout is clean, then use the recorded known-good commit in a detached checkout and reapply only the reviewed scope:
+
+```sh
+git status --short
+git switch --detach KNOWN_GOOD_COMMIT
+ansible-playbook ansible/site.yml --tags AFFECTED_TAG --check --diff --ask-become-pass
+ansible-playbook ansible/site.yml --tags AFFECTED_TAG --ask-become-pass
+```
+
+Replace the placeholders; do not run them literally. Return to the recorded branch after recovery. Source rollback is not a complete machine rollback: APT updates, an existing Codex CLI, container/application data and removed or overwritten user files are not automatically restored. Use the checkpoint/approved recovery path when those states matter; changing a Git ref cannot restore them. Retain old tool environments while any process may still use them. Plugin revision conflicts have a [specific recovery procedure](codex.md#recover-a-marketplace-conflict); do not delete the plugin cache or rebuild the VM as a shortcut.
+
+## Windows rollout
+
+The launcher executes its linked checkout, while in-progress builds/clones retain their recorded payload identities. Rerunning launcher installation updates the forwarding files; it does not upgrade VMs or rebuild published bases. Recipe changes select new versioned images. Follow [Hyper-V recovery](hyperv.md#recovery-compatibility-and-validation) for interrupted operations; do not edit a recovery record or delete its payload to force it onto newer source.

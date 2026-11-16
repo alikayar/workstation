@@ -14,7 +14,7 @@ Workstation places development execution inside Ubuntu and keeps host connectivi
 | Chrome | Managed root-owned executable, isolated profile, task context/page ownership and namespace policy | Contexts are not VM isolation; the AppArmor policy grants user namespaces rather than confining filesystem/network access |
 | Tool downloads | Reviewed pins; checksums/signatures where implemented | Not every dependency is transitively locked; pins do not establish that a package is harmless |
 
-The detailed [Hyper-V policy](windows.md#network-isolation), [browser boundary](browser.md#security-boundary), [editor setup](vscode.md) and [Codex ownership](codex.md) remain authoritative for their components. The [verification guide](verification.md) separates local test evidence from unexecuted scenarios.
+The detailed [Hyper-V policy](hyperv.md#network-isolation), [browser boundary](browser.md#security-boundary), [editor setup](vscode.md) and [Codex ownership](codex.md) remain authoritative for their components. The [verification guide](verification.md) records tested revisions and remaining verification limits.
 
 ## Host applications and remote execution
 

@@ -42,4 +42,4 @@ The PHP backend sets `COMPOSER_HOME` inside the selected PHP installation. Exist
 
 ## Dependency update proposals
 
-The [maintenance guide](maintenance.md#dependency-update-proposals) owns Renovate setup, Node LTS behavior, tracked pins and manual checksum-coupled updates. Merging a version proposal does not install it in an existing VM; use the reviewed [Ubuntu update procedure](getting-started.md#update-an-existing-workstation).
+The [maintenance guide](maintenance.md#dependency-update-proposals) owns Renovate setup, Node LTS behavior, tracked pins and manual checksum-coupled updates. Merging a version proposal does not install it in an existing VM; use the reviewed [Ubuntu update procedure](maintenance.md#update-an-existing-workstation).

@@ -34,13 +34,13 @@ Direct untagged applies include all default-enabled components. `workstation_lan
 | `host/windows/codex/` | Host Codex defaults and marked instruction block | Versioned config API edits with conflict prompts; preserve unrelated settings and instructions |
 | `host/windows/terminal/` | Workstation Terminal files and profiles | Managed runtime files; preserve unrelated Terminal settings and the original settings backup |
 
-Ignored `ansible/host_vars/localhost.yml` supplies machine-local overrides. The tracked example supplies only Git identity placeholders. Keep credentials out of both managed templates and publishable overrides. Configuration overrides are not permission to copy authentication stores between host and VM. See [ownership and recovery](getting-started.md#configuration-ownership) before applying over an existing user setup.
+Ignored `ansible/host_vars/localhost.yml` supplies machine-local overrides. The tracked example supplies only Git identity placeholders. Keep credentials out of both managed templates and publishable overrides. Configuration overrides are not permission to copy authentication stores between host and VM. See [ownership and recovery](maintenance.md#configuration-ownership) before applying over an existing user setup.
 
 ## Windows image and clone flow
 
 `wvm create` selects a guest and forwards explicitly supplied options to the shared image/clone pipeline. The image specification combines guest/media identity and recipe/helper hashes. A matching verified Ready image is reused; otherwise a temporary Packer builder installs and generalizes it. Publication requires the expected sealing evidence, builder cleanup, protected storage and recorded disk hash.
 
-Each instance receives a full writable copy with new disk/VM identity. Instance seeding and account setup happen after copying; development tools are applied separately inside Ubuntu. The base is not a runtime parent disk. Records are written before mutations, and frozen payload hashes protect resuming work after source changes. The [Windows guide](windows.md#packer-first-base-images) owns storage paths, flags, phase recovery and guest-specific behavior.
+Each instance receives a full writable copy with new disk/VM identity. Instance seeding and account setup happen after copying; development tools are applied separately inside Ubuntu. The base is not a runtime parent disk. Records are written before mutations, and frozen payload hashes protect resuming work after source changes. The [Hyper-V guide](hyperv.md#packer-first-base-images) owns storage paths, flags, phase recovery and guest-specific behavior.
 
 For selected Ubuntu provisioning, the host bundles tracked Ansible/dotfile sources and the guest runner, excluding private host variables and Git history. It retains the bundle hash for retries. `wvm configure` reuses that saved source selection; it is not an implicit update to the latest working tree. After Ubuntu is ready, SSH publishes the remote account boundary used by host applications.
 

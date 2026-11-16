@@ -14,29 +14,7 @@ Use separate evidence for source checks, isolated configuration regressions, a c
 | Browser smoke | `python3 tests/browser_smoke.py` | Real Chrome and pinned MCP; local fixture, tool contract, form interaction, state after reload, context isolation, screenshots, trace, console/network observations, native audits and graceful cleanup. |
 | Browser battle | Same script with `--battle` | Adds deliberately broken audit content, rejected tool calls, bounded DOM timeout, HTTP 500 with no state writes, SIGTERM with an active trace/page, and a fresh-process recovery scenario. Includes smoke; no automatic retry. |
 
-The [browser guide](browser.md) owns operational behavior; this page owns its verification. The local evidence below verifies the bounded test workload. Fresh-install and hosted CI results remain separate.
-
-## Reading path and evidence status
-
-| Boundary | Current evidence | Remaining work |
-| --- | --- | --- |
-| Linux configuration and helpers | Prepared VM: 21/21 without skips; hosted source run: 18 passed, 3 declared installed-tool skips | Live Hyper-V/WSL and non-x86_64 coverage remain separate |
-| Chrome/MCP integration | Local and hosted Ubuntu 24.04/26.04 battle phases passed | Screenshot review for each new visual claim; no general sandbox guarantee |
-| Windows host/VM contracts | 41/41 passed in each hosted PowerShell 5.1/7 job, no skips | Live Hyper-V image/clone/recovery validation remains separate |
-| Fresh Ubuntu install/idempotency | Both x86_64 runners provisioned successfully; second apply `changed=0`; 21/21 regressions per OS | Live Hyper-V image/recovery and WSL installation remain separate |
-| Hyper-V images/clones/recovery | Source review and authored isolated contracts; older bounded network evidence is documented separately | Fresh live image/clone/recovery validation for both guests |
-
-This table records the prepared work and observed local runs, not the status badge of an unexecuted workflow. The [Windows network evidence](windows.md#network-validation-evidence) predates the current image/clone changes and does not validate those changes. Retain each run's result/artifacts with its tested source revision.
-
-## Local evidence: 2026-11-16
-
-The final installed-tool/configuration regression run under Ubuntu's system Python 3.12.3 passed 21 cases with zero failures/errors/skips. It includes the reduced MCP/component catalog, security/base tag selection, settings/archive/appearance protections, actual Codex plugin idempotency, rendered Graphify indexing and real user-service lifecycle. Ansible syntax, production-profile lint (27 files, no failures/warnings), actionlint, compilation of 19 Python sources, Renovate JSON parsing and diff whitespace checks passed. Local file/heading review checked 194 links across 21 Markdown files. A separate real doctor invocation returned OK for all 13 requested observations. These runs did not apply full provisioning or establish live SSH/UFW behavior.
-
-An earlier standalone browser smoke run and browser battle passed their normal, SIGTERM and fresh-process restart phases. They verified the declared interaction/isolation/audit/error cases, native trace/report artifacts and graceful EOF cleanup. No observed process required forced reaping and no owned PIDs remained after any phase. Desktop and mobile screenshots from the normal phase were visually inspected without clipping or overlap. This browser evidence predates the later component removals, default security enablement and Ubuntu operations changes; it is not clean-install evidence for those changes.
-
-Browser-run versions were Python 3.15.2, Node 26.13.0, Chrome for Testing 157.0.8103.38, Chrome DevTools MCP 1.12.0 and bundled Lighthouse 13.5.0. Initial failed attempts were retained separately: template-variable precedence, missing offline npm cache and a shared negative-fixture state key. The renderer, early-exit cleanup and fixture isolation were corrected before the passing run; package-cache preparation remained explicit.
-
-The local suites did not replace active Codex configuration or apply the full workstation playbook. They do not simulate SIGKILL or power loss. Raw results and protocol/screenshot/trace/audit evidence remain in private run directories. Keep failed attempts separate when repeating. Hosted Windows and clean-install outcomes must be recorded independently against their tested commit.
+The [browser guide](browser.md) owns daily browser operation. This page owns test prerequisites, execution, acceptance and [recorded results](#recorded-results-2026-11-16).
 
 ## Ubuntu operations coverage
 
@@ -44,9 +22,9 @@ The local suites did not replace active Codex configuration or apply the full wo
 
 Graphify cases render the actual adapter through Ansible. Private-cache cases inject a failed pointer publication, verify that the prior immutable snapshot remains available, bound writer lock contention and reject generation traversal. `--installed-tools` additionally uses the already installed Graphify environment against a disposable Git fixture: index/query, info/query while another writer holds the lock, immediate writer timeout, stale-source rejection, update and query of the new generation. No semantic model call or code-discovery performance benchmark is run. A separate contract ensures the benchmark adapter captures the new graph pathname on refresh.
 
-On a machine with a working systemd user manager, `--installed-tools` also starts a synthetic foreground service with a child process. It verifies the real unit's memory/CPU/runtime properties, duplicate-ID rejection, status/log access and exact stop/control-group cleanup. Only the generated UUID unit is touched. Missing user-manager access is recorded as an explicit skip rather than replaced by a privileged/system-wide launch; the local prepared VM run had no skips. These checks establish the bounded service scenario, not live application readiness, OOM/load capacity or filesystem/network confinement.
+On a machine with a working systemd user manager, `--installed-tools` also starts a synthetic foreground service with a child process. It verifies the real unit's memory/CPU/runtime properties, duplicate-ID rejection, status/log access and exact stop/control-group cleanup. Only the generated UUID unit is touched. Missing user-manager access is recorded as an explicit skip rather than replaced by a privileged/system-wide launch. These checks establish the bounded service scenario, not live application readiness, OOM/load capacity or filesystem/network confinement.
 
-The [local evidence](#local-evidence-2026-11-16) records the passing prepared-VM run. Source contract coverage does not replace the hosted fresh-install matrix or live SSH/UFW verification; doctor observations do not establish browser sandbox enforcement or application readiness.
+See [recorded results](#recorded-results-2026-11-16) for the hosted run. Live SSH reachability and sandbox enforcement require separate verification.
 
 ## Source checks
 
@@ -90,19 +68,11 @@ Run on a Windows x64 machine in each shell, with a distinct new artifact directo
 
 On **Actions → CI → Run workflow**, choose `scope=windows` to run only the Windows matrix, without Ubuntu provisioning or browser jobs. The default `scope=all` keeps the full manual workflow.
 
-The manual `windows-powershell` Actions job performs source parsing and runs this suite independently with `powershell` and `pwsh`. Failures are not skipped or retried. `result.json` records shell/OS/compiler versions, production/test source hashes, case outcomes and durations; per-case logs are retained. Only result/log files are uploaded, excluding compiled peers and generated configuration. PowerShell remains unavailable in the Ubuntu VM; actual execution is provided by the hosted matrix described below.
+The manual Windows Actions matrix performs source parsing and runs this suite independently with `powershell` and `pwsh`. Failures are not skipped or retried. `result.json` records shell/OS/compiler versions, production/test source hashes, case outcomes and durations; per-case logs are retained. Only result/log files are uploaded, excluding compiled peers and generated configuration. Use the hosted matrix when PowerShell is unavailable locally.
 
-This suite does not build an image, boot a guest, mount a real VHD, install host applications, change a network policy or prove live Hyper-V isolation. Fresh image/clone/recovery coverage remains the separate work listed in the [Windows guide](windows.md#recovery-compatibility-and-validation).
+This suite does not build an image, boot a guest, mount a real VHD, install host applications, change a network policy or prove live Hyper-V isolation. Fresh image/clone/recovery coverage remains the separate work listed in the [Hyper-V guide](hyperv.md#recovery-compatibility-and-validation).
 
-## Hosted Windows evidence: 2026-11-16
-
-[Run 43846169110](https://github.com/alikayar/workstation/actions/runs/43846169110), testing implementation commit `f6af004`, passed **41/41 cases with no failures or skips in each shell**: Windows PowerShell 5.1.26100.33648 (Desktop) and PowerShell 7.6.9 (Core). Both runners reported Windows NT 10.0.26100.0 and the inbox .NET Framework compiler 4.8.9221.0. The uploaded `result.json` files retain exact production/test source hashes, case outcomes, durations and execution boundaries. `scope=windows` skipped Ubuntu installation and browser jobs as intended.
-
-The first [hosted attempt](https://github.com/alikayar/workstation/actions/runs/43845325532) exposed a Terminal assertion counting its own harness log, nested Newtonsoft property enumeration on PowerShell 7 and config API stdin encoding on PowerShell 5.1. A [diagnostic attempt](https://github.com/alikayar/workstation/actions/runs/43845784919) confirmed the latter two after fixture isolation was corrected. The production fixes enumerate JObject properties directly and initialize redirected stdin with BOM-free UTF-8 while restoring the host console encoding. Failed attempts remain separate evidence; no scenario was skipped to obtain the passing result.
-
-The automatic Ubuntu source job also exposed Python 3.12's TOML 1.0 parser rejecting multiline inline tables accepted by the newer local interpreter. The same granular permission values now use a TOML 1.0-compatible inline table. The [automatic source run 43846159821](https://github.com/alikayar/workstation/actions/runs/43846159821) then passed source checks and the standard suite: 18 passed, zero failures/errors and three declared installed-tool skips. A separate prepared-VM run under system Python 3.12.3 passed all 21 with no skips. These source/contract outcomes do not establish Windows desktop installation, live Hyper-V isolation or a fresh Ubuntu provisioning pass.
-
-## Hosted full CI evidence: 2026-11-16
+## Recorded results: 2026-11-16
 
 [Full run 43849720570](https://github.com/alikayar/workstation/actions/runs/43849720570) passed every job on implementation commit `0e1cdf6`, with `scope=all`, `browser=true` and `browser_battle=true`. The run includes real provisioning on disposable GitHub-hosted x86_64 Ubuntu runners; the current development VM was not reprovisioned.
 
@@ -111,13 +81,11 @@ The automatic Ubuntu source job also exposed Python 3.12's TOML 1.0 parser rejec
 | Ubuntu 24.04 | Passed | `ok=96 changed=0 failed=0` | 21/21, no skips | Normal, SIGTERM and restart passed |
 | Ubuntu 26.04 | Passed | `ok=97 changed=0 failed=0` | 21/21, no skips | Normal, SIGTERM and restart passed |
 
-The Windows PowerShell 5.1 and PowerShell 7 jobs each passed 41/41 without skips in the same run. Source checks passed; the standard source-only regression job intentionally skips its three installed-tool cases, which the Ubuntu installation jobs exercise separately.
+The Windows PowerShell 5.1.26100.33648 and PowerShell 7.6.9 jobs each passed 41/41 without skips in the same run. Source checks passed; the standard source-only regression job intentionally skips its three installed-tool cases, which the Ubuntu installation jobs exercise separately.
 
 Both browser reports mark complete, show a stopped fixture server, no remaining observed owned PIDs and no forced descendant cleanup across all three phases. The negative artifact-path case was rejected outside the declared MCP root. Native trace/audit reports were retained. Normal-phase desktop/mobile screenshots from both Ubuntu runners were visually inspected without clipping or horizontal overflow. Runtime versions were Python 3.15.2, Node 26.13.0, Chrome 157.0.8103.38, MCP 1.12.0 and bundled Lighthouse 13.5.0. Hosted artifacts retain the exact workload source hashes, per-case outcomes, native reports and cleanup evidence for the tested commit.
 
-The first [full attempt](https://github.com/alikayar/workstation/actions/runs/43847157503) exposed `/run/sshd` missing before OpenSSH policy validation on Ubuntu 24.04, and the test MCP client's absent roots capability when GitHub's artifact directory lay outside the OS temp root. The security role now prepares the standard runtime directory and explicitly starts SSH after validated policy installation. The client advertises only its private attempt artifact root; unrestricted-path access was not enabled. The intermediate [SSH-fixed attempt](https://github.com/alikayar/workstation/actions/runs/43848925258) retained the old client and its expected root failure. All failed attempts remain distinct from the passing run.
-
-These hosted checks establish the declared provisioning, idempotency, isolated-contract and bounded-browser workflows. They do not create Hyper-V images/clones, exercise live guest-to-host network isolation, establish a complete WSL install or prove production capacity/sandbox security.
+These hosted checks establish the declared provisioning, idempotency, isolated-contract and bounded-browser workflows. Live Hyper-V image/clone/recovery validation for both guests and complete WSL installation remain outstanding. The older [bounded network experiment](hyperv.md#network-validation-evidence) does not validate the current image/clone lifecycle. See [CI limits](#ci-and-evidence) for other exclusions.
 
 ## Browser setup and execution
 

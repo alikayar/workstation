@@ -7,12 +7,10 @@ Workstation prepares an Ubuntu development environment and, optionally, a Window
 | Starting point | Next action | Completion evidence |
 | --- | --- | --- |
 | Existing Ubuntu VM | [Prepare SSH](host.md#prepare-access-to-ubuntu), then [apply Ubuntu setup](getting-started.md) inside the VM | Ansible finishes; a new SSH session uses the intended user and shell |
-| Windows 11 Pro, no VM yet | [Install wvm and create Ubuntu](windows.md#the-wvm-command) | Account setup completes, the host SSH alias works, and the selected development setup finishes |
+| Windows 11 Pro, no VM yet | [Install wvm](windows.md#the-wvm-command), then [create Ubuntu](hyperv.md#create-a-vm) | Account setup completes, the host SSH alias works, and the selected development setup finishes |
 | WSL 2 | Read [WSL prerequisites](getting-started.md#wsl-2), then choose native Docker or Desktop integration | The selected roles finish inside the intended distribution |
 | Configured workstation | [Connect the app and open a VM project](host.md#prepare-the-vm-and-connect-the-app) | The selected project path and command execution are inside Ubuntu |
-| Existing checkout needing an update | [Review and apply the changed scope](getting-started.md#update-an-existing-workstation) | The intended configuration is applied; separately authorized checks supply verification |
-
-An installation finishing is not proof of security isolation, a clean-install test or an application test pass. The [verification guide](verification.md) distinguishes those claims.
+| Existing checkout needing an update | [Review and apply the changed scope](maintenance.md#update-an-existing-workstation) | The intended configuration is applied; separately authorized checks supply verification |
 
 ## Daily workflows
 
@@ -28,7 +26,8 @@ An installation finishing is not proof of security isolation, a clean-install te
 | Codex configuration ownership, instructions and draw.io plugin | [Codex](codex.md) |
 | Managed MCP integrations and project-specific integration ownership | [MCP](mcp.md) |
 | Host/remote editor settings and bundled static appearance | [VS Code](vscode.md) |
-| Windows applications, VM lifecycle, image stores and recovery | [Windows and wvm](windows.md) |
+| Windows applications and wvm launcher | [Windows host setup](windows.md) |
+| Hyper-V VM lifecycle, network policy, image stores and recovery | [Hyper-V management](hyperv.md) |
 
 ## Maintain and assess the system
 
@@ -41,4 +40,4 @@ An installation finishing is not proof of security isolation, a clean-install te
 | Why Graphify plus source search instead of a default language server? | [Code-discovery decision](code-discovery.md) |
 | How can the discovery comparison be reproduced? | [Benchmark runner](../benchmarks/code-discovery/README.md) |
 
-Commands are examples to run in the stated environment, not instructions for an agent to execute without task authorization. Project repositories own their application dependencies, service commands and tests. Workstation does not install shared engineering skills or replace project instructions.
+Project repositories own their application dependencies, service commands and tests; shared engineering skills are managed separately.

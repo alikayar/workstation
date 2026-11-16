@@ -63,3 +63,38 @@ Status exposes selected state/result/PID/limit properties, not environment or co
 A forgotten ID can be located with `systemctl --user list-units 'workstation-task-*' --all`; confirm ownership and the original working directory before acting on it. Do not run a broad stop against that pattern. Failed/inactive unit metadata is distinct from running processes. No automatic artifact or unrelated-service cleanup is performed.
 
 UUID/directory checks are ownership conventions within one development account, not a boundary against another process with the same UID. Resource limits do not sandbox filesystem/network access. Keep browser MCP processes under their client's existing lifetime rather than detaching them into these services. The [verification guide](verification.md) records isolated and real-user-manager coverage; [security boundaries](security.md) owns the broader VM/host limits.
+
+## Inspect the agent environment
+
+When a tool is missing or resolves to an unexpected version, run the relevant commands from the active project directory. Project configuration takes precedence over workstation defaults; these commands do not replace project checks.
+
+```sh
+command -v node python3 go bun uv codex
+mise which node
+MISE_AUTO_INSTALL=0 node --version
+```
+
+Replace `node` with the affected tool; Go uses `go version`. In a shell without mise shims on PATH, use `~/.local/bin/mise exec -- COMMAND` with `MISE_AUTO_INSTALL=0` to avoid installing a missing runtime during inspection.
+
+For local Docker access issues, explicitly target the VM's daemon:
+
+```sh
+docker --host unix:///var/run/docker.sock info --format '{{.ServerVersion}}'
+```
+
+This does not inspect rootless or remote Docker daemons. MCP configuration files also cannot establish which tools the current chat exposes; inspect the chat's available tools separately.
+
+## Sudo compatibility
+
+Ubuntu 26.04 uses `sudo-rs` by default, whose password prompt is not understood by some distribution-packaged Ansible versions. The bootstrap package list includes `sudo` so the classic `/usr/bin/sudo.ws` is available. The playbook checks for that executable without privilege escalation and selects it only when no host/CLI `ansible_become_exe`, `ANSIBLE_BECOME_EXE` or configured become executable override was supplied. It leaves the ordinary `sudo` default in place when the classic binary is absent. No sudoers changes or system-wide provider switch are needed.
+
+Use the Ubuntu user's password at the `BECOME password` prompt. Do not run the playbook itself as root: user-local configuration depends on the intended account's `USER` and `HOME`.
+
+To bootstrap an older checkout affected by prompt detection, install classic sudo and select it just for that invocation:
+
+```bash
+sudo apt-get install --yes sudo
+ANSIBLE_BECOME_EXE=/usr/bin/sudo.ws ansible-playbook ansible/site.yml --ask-become-pass
+```
+
+The automatic choice is a compatibility default, not a requirement to replace a working custom escalation setup. See [Ubuntu's sudo-rs notes](https://ubuntu.com/server/docs/reference/other-tools/sudo-rs/) and the [Ansible prompt compatibility issue](https://github.com/ansible/ansible/issues/85837).

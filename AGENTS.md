@@ -18,7 +18,7 @@ Start at the [documentation home](docs/index.md); [architecture](docs/architectu
 | Ubuntu provisioning | `ansible/`; [setup](docs/getting-started.md) |
 | Installed agent defaults | `dotfiles/codex/`; [Codex](docs/codex.md), [MCP](docs/mcp.md) |
 | Shell and runtimes | `dotfiles/`, Ansible roles; [shell](docs/shell.md), [tools](docs/tools.md) |
-| Windows setup and VM lifecycle | `host/windows/`; [source ownership](docs/windows.md#source-layout), [recovery](docs/windows.md#recovery-compatibility-and-validation) |
+| Windows setup and VM lifecycle | `host/windows/`; [source ownership](docs/windows.md#source-layout), [recovery](docs/hyperv.md#recovery-compatibility-and-validation) |
 | Connections and process lifetime | [Host guide](docs/host.md), [Ubuntu operations](docs/operations.md); record owned services, ports, logs and stop commands |
 | Browser and repository indexing | `agent_tools` role; [browser](docs/browser.md), [agent environment](docs/agent-environment.md) |
 

@@ -8,15 +8,6 @@ Workstation provides executables, version defaults, launchers and their usage gu
 | Review pins and upgrade limits | [Version policy](maintenance.md#version-policy) |
 | Run an authorized browser workflow and close its session | [Browser automation](browser.md) |
 | Discover code relationships or index documentation | [Repository knowledge indexing](#repository-knowledge-indexing) |
-| Inspect a page or run a supported audit | [Browser guide](browser.md) |
-
-## Version policy
-
-The [maintenance guide](maintenance.md#version-policy) owns pin policy, retained environments, dependency proposals and upgrade review. Installed versions can differ from source defaults; inspect command resolution from the active project before changing an environment.
-
-## Browser automation
-
-Chrome for Testing and Chrome DevTools MCP are the single managed browser workflow. The [browser guide](browser.md) owns installation, task isolation, page/screenshot checks, audits and cleanup.
 
 ## Repository knowledge indexing
 

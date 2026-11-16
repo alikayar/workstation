@@ -12,32 +12,18 @@
 
 Run project code, dependencies and coding agents inside a dedicated Ubuntu environment. Connect from the host over SSH, and use Ansible to recreate the development setup. Optional Windows tooling builds reusable Hyper-V images and manages independent guest clones.
 
-**[Documentation home](docs/index.md)** · [Architecture](docs/architecture.md) · [Security boundaries](docs/security.md) · [Verification](docs/verification.md)
-
-## Choose a setup path
+## Get started
 
 | Starting point | Guide |
 | --- | --- |
 | Existing Ubuntu VM or physical Ubuntu system | [Install the Ubuntu environment](docs/getting-started.md) |
-| Windows 11 Pro with Hyper-V | [Install wvm and create a VM](docs/windows.md#the-wvm-command) |
-| WSL 2 Ubuntu | [Choose systemd/Docker integration](docs/getting-started.md#wsl-2) |
-| Environment already installed | [Connect Codex or VS Code over SSH and preview an app](docs/host.md) |
+| Windows 11 Pro with Hyper-V | [Install wvm](docs/windows.md#the-wvm-command), then [create a VM](docs/hyperv.md#create-a-vm) |
+| WSL 2 Ubuntu | [Prepare WSL and choose Docker integration](docs/getting-started.md#wsl-2) |
+| Environment already installed | [Connect Codex or VS Code over SSH](docs/host.md) |
 
-Use a non-root development account. Run Ansible inside Ubuntu; run wvm on Windows. Direct untagged Ansible applies install the default baseline without per-package questions. The Windows Ubuntu workflow asks for language, development-tool and helper-tool selections, accepts `hepsi`, and requires final scope confirmation. See [installation scope](docs/getting-started.md#choose-the-installation-scope).
+The environment includes managed language runtimes, shell and CLI tools, Docker, Codex, Graphify, and Chrome with Chrome DevTools MCP. See the [tool inventory](docs/tools.md) for the full list and [documentation home](docs/index.md) for daily workflows, maintenance and verification.
 
-## What is included
-
-The baseline provides common installer prerequisites and native dependency build tools for selected languages; key-only SSH/UFW/AppArmor/security updates; Zsh/Starship and navigation tools; mise-managed Node.js, Python, Go, Bun and PHP; Git and shared CLIs; read-only Ubuntu doctor and UUID-owned systemd task services; Docker Engine; Codex configuration; Graphify; and x86_64 Chrome with Chrome DevTools MCP. Project manifests own application dependencies and runtime overrides. Shared engineering skills are managed separately.
-
-The [tool inventory](docs/tools.md) maps tools to their provisioning owners. [Ubuntu operations](docs/operations.md) covers diagnosis, service RAM/CPU/runtime limits, logs and exact cleanup. The [browser guide](docs/browser.md) owns interaction, screenshots, audits and cleanup. The [maintenance guide](docs/maintenance.md) explains version pins, Renovate proposals and rollout.
-
-## Permissions and isolation
-
-The default Ubuntu Codex configuration gives full filesystem access inside the environment. Default Docker-group membership grants root-equivalent guest authority. Managed Hyper-V Ubuntu guests receive host-side IP filtering with documented limits; other installation paths need their own network isolation. Host applications and remote extension bridges retain their own permissions. Read [security boundaries](docs/security.md) before running unfamiliar code or applying the baseline to a sensitive machine.
-
-## Compatibility and evidence
-
-Ubuntu 24.04/26.04 LTS are the CI targets; x86_64 and aarch64 pass platform validation, with the managed browser available only on x86_64. Source checks and isolated Linux regressions run on relevant PRs/pushes. Manual CI is configured for full Ubuntu installs/idempotency, optional browser smoke/battle, and Windows PowerShell 5.1/7 contracts. Choose `scope=windows` for the Windows matrix alone. The [passing full CI run](https://github.com/alikayar/workstation/actions/runs/43849720570) covers both Ubuntu installations, second-apply idempotency, 21 regressions and browser battle per OS, plus 41 Windows cases per PowerShell version. Live Hyper-V image/recovery and complete WSL installation remain separate. See [actual results and limits](docs/verification.md).
+**Before installing:** the Ubuntu baseline changes SSH/firewall policy, gives VM Codex full filesystem access, and grants root-equivalent authority through the default Docker group. Review [installation scope](docs/getting-started.md#choose-the-installation-scope) and [security boundaries](docs/security.md).
 
 ## License
 

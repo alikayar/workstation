@@ -11,7 +11,7 @@ The host is the computer where you use the desktop app, terminal and browser. Th
 | SSH destination | Guest IP, or a host port forwarded to the guest's SSH port | The VM's reachable DNS name or IP |
 | Availability | Depends on the host and VM staying awake | Depends on the remote machine and network remaining available |
 
-For Windows 11 Pro, the [Windows setup guide](windows.md) covers host applications and Hyper-V VM creation, including the Ubuntu [network policy](windows.md#network-isolation) and [validation limits](windows.md#recovery-compatibility-and-validation). On other hosts, use the VM software or provider you already operate. For WSL 2, follow the [WSL notes](getting-started.md#wsl-2); a working WSL terminal alone does not establish an SSH connection from the desktop app.
+For Windows 11 Pro, [Windows setup](windows.md) covers host applications and [Hyper-V management](hyperv.md) covers VM creation, including the Ubuntu [network policy](hyperv.md#network-isolation) and [validation limits](hyperv.md#recovery-compatibility-and-validation). On other hosts, use the VM software or provider you already operate. For WSL 2, follow the [WSL notes](getting-started.md#wsl-2); a working WSL terminal alone does not establish an SSH connection from the desktop app.
 
 ## Prepare access to Ubuntu
 
@@ -83,7 +83,7 @@ Connect to the same VM and project folder when returning to work. For terminal p
 | SSH reports a changed host key | Verify whether the VM was rebuilt before updating the host's known-host entry |
 | Permission denied | Development username and the public key authorized for that account |
 | Terminal SSH works but the app cannot connect | The app user's SSH config, access to the selected key and the VM's Codex sign-in |
-| Agent cannot find a runtime | VM [PATH and version inspection](getting-started.md#inspect-the-agent-environment); reconnect after environment changes |
+| Agent cannot find a runtime | VM [PATH and version inspection](operations.md#inspect-the-agent-environment); reconnect after environment changes |
 | Browser preview does not load | Application listener in the VM, actual port and the running SSH tunnel |
 
 Host replacement requires setting up the app and SSH access again. When the VM is remote and remains available, its repositories and installed toolchains stay in place. A local VM must be moved or recreated separately when replacing the computer that runs it.
