@@ -31,6 +31,15 @@
     groups: sudo
     append: true
 
+- name: Prepare the OpenSSH privilege separation directory before validation
+  become: true
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
 - name: Configure SSH key authentication and development tunnels
   become: true
   ansible.builtin.copy:
@@ -55,6 +64,13 @@
       MaxAuthTries 3
       LoginGraceTime 30
   notify: Reload workstation SSH
+
+- name: Enable SSH with the validated workstation policy
+  become: true
+  ansible.builtin.systemd_service:
+    name: ssh
+    enabled: true
+    state: started
 
 - name: Ensure password quality configuration directory exists
   become: true
