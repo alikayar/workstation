@@ -1,11 +1,9 @@
 ---
 # Build dependencies for mise's vfox PHP backend and its common extensions.
 php_build_packages:
-  - build-essential
   - autoconf
   - bison
   - re2c
-  - pkg-config
   - libxml2-dev
   - libssl-dev
   - libicu-dev

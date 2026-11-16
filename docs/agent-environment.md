@@ -4,98 +4,25 @@ Workstation provides executables, version defaults, launchers and their usage gu
 
 | Task | Section |
 | --- | --- |
-| Review pins and upgrade limits | [Version policy](#version-policy) |
-| Extract text from PDF/Office files | [Document conversion](#document-conversion) |
-| Run an authorized browser workflow and close its session | [Browser automation](#browser-automation) |
+| Diagnose Ubuntu or manage an owned development service | [Ubuntu operations](operations.md) |
+| Review pins and upgrade limits | [Version policy](maintenance.md#version-policy) |
+| Run an authorized browser workflow and close its session | [Browser automation](browser.md) |
 | Discover code relationships or index documentation | [Repository knowledge indexing](#repository-knowledge-indexing) |
-| Use the installed page/site analysis CLIs | [Website audits](#website-audits) |
+| Inspect a page or run a supported audit | [Browser guide](browser.md) |
 
 ## Version policy
 
-- Mise, runtime tools, Composer, selected binaries and MCP packages use reviewed pins already maintained in their respective defaults. APT packages follow Ubuntu's package updates.
-- The Codex role bootstraps a missing CLI through an upstream commit and checksum-pinned installer, but neither pins the resulting CLI release nor upgrades/downgrades an existing executable. The immutable installer URL avoids breaking fresh installs when the public installer endpoint changes. Desktop/CLI updates remain explicit lifecycle decisions; this avoids Ansible fighting the desktop updater. Do not describe the entire environment as bit-for-bit reproducible.
-- Update a tool's pin only after reviewing its release and the behavior used here. Apply the relevant role, run authorized checks, and review project overrides before changing an active version.
-- Optional Python tools live in separate versioned environments. Top-level packages are pinned; transitive dependencies are not locked. Old environments are retained until deliberately removed, since another process may still use them.
-- Agent-browser, Lightpanda and Chrome for Testing use explicit version and SHA256 pins. The native CLI has no npm runtime dependency; APT browser libraries follow Ubuntu updates.
-
-## Document conversion
-
-Enable MarkItDown with `agent_tools_markitdown_enabled: true` in the ignored local host variables and apply `--tags markitdown`. The existing mise/uv/Python setup must be installed first.
-
-Use `workstation-markitdown input.pdf -o output.md`. The launcher points to an isolated uv tool environment under `~/.local/share/workstation/markitdown-0.1.9/`, with only the PDF, DOCX, PPTX and XLSX extras requested. Provisioning refuses an existing linked or unmarked launcher. It does not enable third-party converter plugins or configure hosted AI services. Text extraction does not prove layout, OCR or complex table fidelity.
-
-Disabling the setting skips future installation; it does not uninstall an existing environment or launcher.
+The [maintenance guide](maintenance.md#version-policy) owns pin policy, retained environments, dependency proposals and upgrade review. Installed versions can differ from source defaults; inspect command resolution from the active project before changing an environment.
 
 ## Browser automation
 
-The Ubuntu `agent_tools` role installs **agent-browser 0.41.2**, **Lightpanda 1.0.3** and **Chrome for Testing 157.0.8103.38** on x86_64. The managed launcher defaults to Lightpanda. All three downloads are versioned and SHA256 checked. Lightpanda lives in the user-owned `~/.local/share/workstation/lightpanda/1.0.3/` directory; the CLI and Chrome version directories under `/opt/workstation` are root-owned. Chrome's completed extraction is recorded only after unpacking; an interrupted extraction is retried. Old versions, artifacts and the verified archive cache are retained.
-
-Chrome for Testing does not provide a Linux ARM64 download. `agent_tools_browser_enabled` therefore defaults to false on ARM64; explicitly enabling it there stops with an explanation. Other roles retain their ARM64 support. Setting this variable to false skips future installation; it does not uninstall an existing browser.
-
-Full workstation provisioning includes this setup. To apply it separately, run inside Ubuntu from the repository root:
-
-```sh
-ansible-playbook ansible/site.yml --tags agent_browser,codex --ask-become-pass
-```
-
-The `agent_browser` tag installs only browser dependencies and launchers. The `codex` tag also applies the existing Codex role, including its managed global instructions and configuration; that role remains their single owner. Applying either role does not authorize or run browser verification or install external skills. Browser setup refuses to replace unrelated or linked `~/.local/bin/agent-browser` and `workstation-browser-task` files. Existing user and project browser configuration is not overwritten; the launcher loads a separate managed config. It clears inherited browser settings and refuses session/profile/restore/CDP/provider, config/executable, headed and idle-timeout overrides. `agent_tools_browser_engine` sets the default engine (`lightpanda` initially); a command may explicitly select `--engine lightpanda` or `--engine chrome`, using only the managed binaries. There is no automatic fallback. Select the engine when opening a new unique session and keep the selection consistent for that session. These managed commands intentionally expose a subset of upstream CLI flags: use `agent-browser --session TASK COMMAND [FLAGS ...]`, with formatting flags such as `--json` after the command. `connect` and identity/profile overrides are refused; `wait --state` still controls element visibility. `--help` and `--version` remain available without starting a session. Preview mode skips downloads; it does not verify asset availability or checksum bytes.
-
-On an already prepared x86_64 VM, install the pinned Lightpanda binary and update only the user-local browser launchers without sudo or changes to Chrome, Codex or other tools:
-
-```sh
-ansible-playbook ansible/site.yml --tags agent_browser_lightpanda
-```
-
-This scope requires the existing managed agent-browser CLI/config. It preserves unrelated launchers using the same ownership guards as the full apply. Applying provisioning starts no browser and does not run verification.
-
-Lightpanda runs JavaScript and exposes DOM extraction through CDP. It does not provide Chrome's visual fidelity; screenshot, PDF and other rendering-dependent operations are not promised by this setup. For authorized visual work, start a fresh task session with `agent-browser open URL --engine chrome` and use that engine consistently. Lighthouse keeps using managed Chrome independently of this default. A change to the default affects new sessions; existing sessions are not stopped or migrated.
-
-### One foreground workflow
-
-```sh
-workstation-browser-task sh -eu -c '
-  agent-browser open http://127.0.0.1:3000
-  agent-browser snapshot -i
-  agent-browser get title
-'
-```
-
-The helper generates a unique session and a mode-0700 directory under `~/.local/share/workstation/browser-tasks`, prints both to stderr and passes session/output settings to child commands. It clears inherited `AGENT_BROWSER_*` settings first, so profile, CDP and provider settings are not inherited. Cleanup closes only its own session after the foreground command exits, including failures and handled INT/TERM/HUP signals. Artifacts remain for review. A successful workflow with failed cleanup returns nonzero; an already-failed workflow keeps its failure status. Do not detach browser commands or servers from this scope.
-
-### Agent steps across tool calls
-
-Generate a unique ID once:
-
-```sh
-printf 'task-%s\n' "$(cat /proc/sys/kernel/random/uuid)"
-```
-
-Record the printed ID and pass that literal value on every subsequent command, replacing `TASK_ID` below:
-
-```sh
-agent-browser --session TASK_ID open http://127.0.0.1:3000
-agent-browser --session TASK_ID snapshot -i
-agent-browser --session TASK_ID get title
-agent-browser --session TASK_ID close
-```
-
-Managed Codex instructions require explicit close at task completion, including failure/cancellation. There is no reliable OS event for the end of an arbitrary agent chat, so this multi-call workflow still requires agent cleanup. Never close all sessions. SIGKILL, power loss and disconnected agents can bypass cleanup; the five-minute native idle timeout is a fallback for local headless sessions. Keep headed, remote-attached and restored personal profiles outside this workflow.
-
-The browser runs inside Ubuntu and reaches the application's VM-local address. For visual verification, explicitly use Chrome and inspect its screenshots; accessibility snapshots alone do not prove visual correctness. Session separation is not a security boundary against processes running as the same Unix user. Browser execution still needs the user's authorization.
-
-### Browser security boundary
-
-Lightpanda is a user-owned process in this VM; the Chrome AppArmor namespace rule does not sandbox it. Session isolation is not filesystem or network confinement.
-
-On AppArmor-enabled Ubuntu, a profile permits user namespaces for the exact root-owned Chrome executable, following [Chromium's documented approach](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md). The exact policy is reloaded on each apply so a previously interrupted apply can recover even when its file is unchanged. File changes carry the Ansible change report; the derived kernel reload does not restart the AppArmor service. The role does not disable AppArmor globally, add a SUID executable or pass `--no-sandbox`. This grants namespace use; it is not full filesystem/network confinement. Upstream agent-browser itself disables Chrome sandboxing under root, `CI` and container environments; use the intended non-root native VM and do not treat CI/container launches as sandbox verification.
-
-Upstream: [installation](https://agent-browser.dev/installation), [sessions](https://agent-browser.dev/sessions), [commands](https://agent-browser.dev/commands). The CLI and Lightpanda digests come from their pinned upstream release asset metadata; the Chrome SHA256 was calculated from Google's version-specific archive. Checksums freeze these bytes; they are not vendor signatures.
+Chrome for Testing and Chrome DevTools MCP are the single managed browser workflow. The [browser guide](browser.md) owns installation, task isolation, page/screenshot checks, audits and cleanup.
 
 ## Repository knowledge indexing
 
 Code discovery uses Graphify plus direct source search without a default language-server MCP. The [comparison and decision](code-discovery.md) records the measured tradeoffs.
 
-The `agent_tools` role provides `workstation-graphify` by default (`agent_tools_graphify_enabled: false` skips provisioning without uninstalling an existing tool). Graphify and its separate mise Python runtime are version-pinned in the role defaults and installed in a user-owned uv tool environment. Project runtimes, manifests and lockfiles are unchanged. The workstation must already provide mise and uv; this scoped apply installs only the Graphify environment and launcher:
+The `agent_tools` role provides `workstation-graphify` by default (`agent_tools_graphify_enabled: false` skips provisioning without uninstalling an existing tool). Graphify and its separate mise Python runtime are version-pinned in the role defaults and installed in a user-owned uv tool environment. Project runtimes, manifests and lockfiles are unchanged. The workstation must already provide mise and uv; this scoped apply installs common prerequisites plus the Graphify environment and launcher:
 
 ```sh
 ansible-playbook ansible/site.yml --tags graphify
@@ -123,6 +50,14 @@ The adapter calls real Graphify extraction/build/query APIs and bypasses upstrea
 
 Default indexing extracts code AST relationships and Markdown structure locally. `index` and `update` rebuild from the current included corpus while reusing Graphify's per-file extraction cache; deletion therefore removes old nodes. Queries compare included paths, modification time/size metadata and tool version with the saved index and refuse stale/missing output. Deliberately preserved metadata can defeat this freshness check. Open current source/contracts to verify results; a relationship does not establish an adopted architectural rule. A missing match or same-name ambiguity is a reason to narrow the query or use source search, not evidence that the implementation is absent.
 
+### Concurrent agents and publication
+
+Queries and `info` capture one immutable published generation and do not acquire the writer lock. Index/update operations serialize with a bounded wait: five seconds by default, configurable with the global `--lock-timeout` option (0–300 seconds, before the subcommand). A busy writer yields an explicit timeout; it does not fall back to a different index or silently accept stale data. For example, `workstation-graphify --lock-timeout 0 update --structure-only` refuses immediately if another writer is active.
+
+Each successful build writes graph, semantic content and metadata into one private immutable generation, then atomically replaces `current.json`. Before the atomic pointer replacement, failed publication retains the previous pointer; interruption around that cutover exposes a complete old or new generation, never a mixed snapshot. Queries still refuse stale source metadata while a rebuild is in progress; nonblocking reads do not promise a fresh answer during source edits. Generations remain available for readers that already captured them. Old generations and interrupted unpublished generations are retained, consuming disk space; cache cleanup requires a deliberate idle/exclusive maintenance window, never deleting another agent's active snapshot. There is no background garbage collector.
+
+`info` reports the current generation's graph path, or null before the first publication. Consumers must use the graph path returned after each successful index/update rather than assuming a stable `cache/graph.json` pathname. Older flat-layout caches are not migrated; explicitly rebuild after installing this adapter. The benchmark adapter follows the newly published graph on refresh, and historical benchmark measurements remain tied to their recorded runner source hashes.
+
 ### Semantic documentation through Codex
 
 For automated semantic document ingestion, run `workstation-graphify index --docs docs` or name specific Markdown files/directories after `--docs`. With no paths, `--docs` selects all included Markdown. The adapter invokes the workstation's existing `codex exec` using its normal model/configuration and login; it does not request an API key, copy authentication files or add provider env variables. Codex must already be installed through the `codex` role. The subprocess is read-only and ephemeral, with shell, delegation, Workstation-managed MCP servers, app tools and web search disabled for that invocation, and receives complete selected documents through stdin under the installed official extraction spec and a strict JSON output schema. No global Codex configuration or approval rules are changed. This is model processing through Codex's normal data boundary, not offline analysis.
@@ -135,21 +70,14 @@ For automated semantic document ingestion, run `workstation-graphify index --doc
 
 Repository indexing and queries are task-scoped discovery, not application validation. Tool availability grants no permission for tests, builds, browser work, additional model providers, publication or Git actions. Follow the active repository’s instructions and source scope; a small known change can use direct search without building any graph.
 
-## Website audits
+## Tool failures and retained state
 
-The `agent_tools` role installs Lighthouse 13.6.0 on supported browser hosts (`agent_tools_lighthouse_enabled` follows `agent_tools_browser_enabled` by default). The official npm package lives in a versioned Workstation tool directory. Its `lighthouse` entry point selects the installed workstation Node and managed Chrome; application manifests/runtimes stay unchanged. The five-line launcher only supplies executable paths, including Lighthouse's native `CHROME_PATH` internally. No user env export, custom collector or Docker image is needed.
+| Symptom | Next action |
+| --- | --- |
+| `workstation-graphify` not found | Inspect the active project PATH/mise resolution, then check whether the Graphify scope was selected |
+| Index missing or stale | Run the authorized `index`/`update` for the intended checkout; queries deliberately refuse stale state |
+| Expected code missing from results | Check the supported source scope and ignore rules, then verify directly in source; a graph is not a complete architectural contract |
+| Semantic documentation extraction fails | Preserve the private failure evidence and prior graph; verify Codex availability/sign-in without inspecting auth stores |
+| Launcher already exists but provisioning refuses it | Establish ownership and retain the file; do not overwrite an unrelated or linked launcher |
 
-The same role installs SiteOne Crawler 2.5.1 from checksum-pinned upstream static Linux archives for x64 and ARM64. A direct `siteone-crawler` symlink selects its versioned user-local installation, retaining the upstream license. It has no wrapper, service, database, additional AI provider or application dependency. HTTP crawling works without Chrome; optional rendering needs an explicitly selected existing browser and browser authorization. `--tags siteone` installs only the crawler. Installation does not start a crawl, and the CLI's native AI/upload/browser-download features are not configured or enabled by Workstation.
-
-A full apply installs managed Chrome before Lighthouse. On an existing prepared VM, install the audit tools:
-
-```sh
-ansible-playbook ansible/site.yml --tags lighthouse,siteone
-lighthouse --version
-```
-
-If managed Chrome is absent, apply `--tags agent_browser,lighthouse` with the normal become authorization. This reuses the existing browser libraries/AppArmor policy; it does not disable Chrome sandboxing. Installation starts no browser or service.
-
-Use native JSON/HTML reports, plus Lighthouse `--save-assets` for traces/devtools logs. `lighthouse --help`, `siteone-crawler --help`, the [Lighthouse CLI documentation](https://github.com/GoogleChrome/lighthouse#using-the-node-cli) and [SiteOne documentation](https://github.com/janreges/siteone-crawler/tree/v2.5.1) define their interfaces. Keep reports under the consuming project's ignored-results policy or a private temporary directory. Browser execution, application startup and repeated measurements require their applicable task authorization.
-
-Workstation installs the tools independently of agent skills. Audit workflows and interpretation guidance belong to separately managed skills or the consuming project; provisioning does not inspect or modify those sources.
+A retained cache or versioned environment can still belong to another process. Removing it is a separate cleanup decision, not a generic response to a failed query. See [maintenance](maintenance.md) for update policy and [security boundaries](security.md#privilege-data-and-maintenance) for artifact/model-processing exposure.

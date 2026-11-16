@@ -30,18 +30,6 @@
     },
     {
       "customType": "regex",
-      "description": "Pinned Python MCP packages in the VM Codex template.",
-      "managerFilePatterns": [
-        "/^dotfiles/codex/config\\.toml$/"
-      ],
-      "matchStrings": [
-        "(?<depName>mcp-grafana|postgres-mcp)==(?<currentValue>[0-9][0-9A-Za-z.+-]*)"
-      ],
-      "datasourceTemplate": "pypi",
-      "versioningTemplate": "pep440"
-    },
-    {
-      "customType": "regex",
       "description": "Pinned Chrome DevTools MCP npm package in the VM Codex template.",
       "managerFilePatterns": [
         "/^dotfiles/codex/config\\.toml$/"

@@ -20,7 +20,7 @@ The `shell` role installs these files and sets `/usr/bin/zsh` as the login shell
 - `mise` is initialized before Starship so the prompt can display active runtime versions.
 - `EDITOR` and `VISUAL` default to `nano`.
 
-The linked configuration files are the source of truth. Local machine-specific shell changes should be made deliberately and kept separate from the managed file.
+The linked configuration files are the source of truth. Local machine-specific shell changes should be made deliberately and kept separate from the managed file. Reapplying the role replaces managed shell/prompt files with Ansible backups; it does not merge arbitrary personal edits. See [configuration ownership](getting-started.md#configuration-ownership) before maintaining a customized source.
 
 ## Session activation
 
@@ -37,3 +37,5 @@ Ansible cannot replace the shell process that invoked it. After changing the log
 After applying the `mise`, `cli_tools` and `shell` roles, open a new Zsh session. Ctrl+R searches your command history interactively, Ctrl+T inserts selected file paths, and Alt+C selects a directory through fzf. `z studio` jumps to a frequently visited matching directory; `zi` opens an interactive directory picker. These commands keep their state local and do not introduce a history-sync service. Agents must not inspect shell history.
 
 Use `tmux new -s work` for a persistent session, detach with Ctrl+B then D, and reconnect with `tmux attach -t work`. A tmux session survives an SSH client disconnect while the Ubuntu environment continues running; shutting down WSL or the host still stops it.
+
+For an agent-owned development server, prefer the explicit [task service workflow](operations.md#start-one-owned-task-service) when a user manager is available. It provides a recorded unit, resource limits, status/logs and an exact stop operation. Tmux remains an interactive session tool; it does not enforce per-task limits or replace application readiness checks.

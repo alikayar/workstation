@@ -15,7 +15,7 @@ For Windows 11 Pro, the [Windows setup guide](windows.md) covers host applicatio
 
 ## Prepare access to Ubuntu
 
-Inside Ubuntu, create or use a non-root development account with sudo access. Enable an SSH server if the image does not already provide one; Ubuntu documents installation and key setup in its [OpenSSH guide](https://ubuntu.com/server/docs/how-to/security/openssh-server/). The Workstation playbook does not install or configure the SSH server.
+Inside Ubuntu, create or use a non-root development account with sudo access. Enable an SSH server if the image does not already provide one; Ubuntu documents installation and key setup in its [OpenSSH guide](https://ubuntu.com/server/docs/how-to/security/openssh-server/). The default Workstation [server security baseline](security.md#ubuntu-server-baseline) installs/manages SSH and disables password access. Establish key access through the console or the existing SSH server before applying; retain a console recovery route.
 
 Authorize your host's public key for that account using your VM console or provider's key setup. Keep the private key on the host. Verify the server's host-key fingerprint through the VM console or provider before accepting the first connection.
 
@@ -51,11 +51,15 @@ This should open a shell as the development user inside Ubuntu. Complete this co
 
 In the **VM shell**, clone Workstation and follow the [Ubuntu setup guide](getting-started.md). Keep application repositories on the VM's Linux filesystem, for example under `~/projects/`. Reconnect after setup so the new login shell and environment take effect.
 
-Authenticate Codex in the VM using its supported sign-in flow. The playbook installs the CLI and configuration but does not provision account credentials. SSH access and authentication to Git hosting are separate as well; configure repository access for the VM without copying the host's private keys.
+For Codex development, authenticate the installed CLI in the VM using its supported sign-in flow; VS Code-only use does not require Codex sign-in. The playbook installs the CLI and configuration but does not provision account credentials. SSH access and authentication to Git hosting are separate as well; configure repository access for the VM without copying the host's private keys.
 
 In the desktop app, open **Settings → Connections**, add or enable the SSH alias, and select a project folder inside the VM, such as `/home/dev/projects/my-project`. The app uses SSH to start the remote Codex app server through the remote user's login shell. Follow the [official remote connection guide](https://learn.chatgpt.com/docs/remote-connections#connect-to-an-ssh-host) for the current app flow.
 
 The selected folder and commands belong to the VM. Host filesystem paths and host-only applications are not automatically available there. The remote app server travels over SSH; it does not need a separately exposed public port.
+
+### Open the same project in VS Code
+
+Configure the host app using the [VS Code guide](vscode.md), install/enable Remote SSH, and choose **Remote-SSH: Connect to Host** with the verified alias. Open the project directory from the remote window. Confirm the remote indicator and terminal account before running commands. Host appearance and remote language tooling belong to different processes; the [security guide](security.md#host-applications-and-remote-execution) explains the remaining host exposure.
 
 ## Preview an application
 

@@ -253,7 +253,9 @@ class Graphify:
         return set(value)
 
     def refresh(self, changes):
-        self.trial.command([self.executable, 'update', '--structure-only'])
+        metadata = json.loads(self.trial.command([self.executable, 'update', '--structure-only']))
+        self.graph = Path(metadata['graph']).resolve()
+        self.graph.relative_to(Path(self.trial.env['HOME']))
 
     def close(self):
         pass

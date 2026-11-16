@@ -3,3 +3,6 @@ workstation_home: "{{ lookup('env', 'HOME') }}"
 
 # Direct Ansible applies include all runtimes unless explicitly narrowed.
 workstation_languages: [node, python, go, bun, php]
+
+# The server access/security baseline is part of the default Ubuntu setup.
+workstation_security_enabled: true

@@ -13,11 +13,17 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import stat
+import zipfile
+import xml.etree.ElementTree as ET
 import unittest
+
+from browser_mcp import MCP, ToolError, text
+from workstation_contracts import WorkstationContracts
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--installed-tools', action='store_true', help='Also exercise real SiteOne extraction and Lighthouse npm recovery on a prepared VM; may download pinned packages.')
+parser.add_argument('--installed-tools', action='store_true', help='Also exercise real Codex plugin registration in a disposable configuration on a prepared VM.')
 parser.add_argument('--output', type=Path, help='New or empty artifact directory; defaults to a private directory under /tmp.')
 OPTIONS = parser.parse_args()
 OUTPUT = OPTIONS.output.resolve() if OPTIONS.output else Path(tempfile.mkdtemp(prefix='ws-regressions-'))
@@ -27,7 +33,7 @@ if any(OUTPUT.iterdir()):
 print(f'Artifacts: {OUTPUT}', flush=True)
 
 
-class Regressions(unittest.TestCase):
+class Regressions(WorkstationContracts, unittest.TestCase):
     def setUp(self):
         self.base = OUTPUT / self._testMethodName
         self.base.mkdir()
@@ -62,6 +68,131 @@ class Regressions(unittest.TestCase):
             self.assertRegex(result.stdout, r'localhost\s*:\s*ok=\d+\s+changed=0\b', str(log))
         return result
 
+    def load_source(self, relative, name):
+        spec = importlib.util.spec_from_file_location(name, ROOT / relative)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def merge_settings(self, path, defaults, *flags, success=True):
+        result = subprocess.run([sys.executable, str(ROOT / 'ansible/roles/vscode/files/merge-settings.py'),
+                                 str(path), str(defaults), *flags], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode == 0, success, result.stderr)
+        return result
+
+    def test_remote_settings_jsonc_merge_backup_and_idempotency(self):
+        path, defaults = self.home / 'settings.json', self.base / 'defaults.json'
+        original = '{/* comment */"editor":{"fontSize":17},"url":"https://example.invalid/a//b","quoted":"/* literal */,}","items":[1,2,],}'
+        path.write_text(original)
+        defaults.write_text('{"editor":{"fontSize":14,"tabSize":4},"items":[3],"newSetting":true}')
+        self.assertEqual(self.merge_settings(path, defaults, '--check').stdout.strip(), 'changed')
+        self.assertEqual(path.read_text(), original)
+        self.assertFalse(path.with_name('settings.json.workstation.bak').exists())
+        self.merge_settings(path, defaults)
+        expected = {'editor': {'fontSize': 17, 'tabSize': 4}, 'url': 'https://example.invalid/a//b',
+                    'quoted': '/* literal */,}', 'items': [1, 2], 'newSetting': True}
+        self.assertEqual(json.loads(path.read_text()), expected)
+        backup = path.with_name('settings.json.workstation.bak')
+        self.assertEqual(backup.read_text(), original)
+        self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+        self.assertEqual(self.merge_settings(path, defaults).stdout.strip(), 'unchanged')
+        self.assertEqual(backup.read_text(), original)
+
+    def test_remote_settings_reject_bad_json_and_linked_ancestors(self):
+        path, defaults = self.home / 'settings.json', self.base / 'defaults.json'
+        defaults.write_text('{"added":true}')
+        for bad in ['[]', 'null', '{"unfinished":']:
+            path.write_text(bad)
+            self.merge_settings(path, defaults, success=False)
+            self.assertEqual(path.read_text(), bad)
+            self.assertFalse(path.with_name('settings.json.workstation.bak').exists())
+        target = self.base / 'outside'
+        target.mkdir()
+        untouched = target / 'settings.json'
+        untouched.write_text('{"retained":true}')
+        link = self.home / 'linked'
+        link.symlink_to(target, target_is_directory=True)
+        self.merge_settings(link / 'settings.json', defaults, success=False)
+        self.assertEqual(untouched.read_text(), '{"retained":true}')
+        self.assertEqual(sorted(p.name for p in target.iterdir()), ['settings.json'])
+        path.unlink()
+        path.symlink_to(untouched)
+        self.merge_settings(path, defaults, success=False)
+        self.assertEqual(untouched.read_text(), '{"retained":true}')
+
+    def test_bootstrap_archive_rejects_escape_links_and_private_variables(self):
+        runner = self.load_source('host/windows/hyperv/ubuntu-26-04/configure-workstation.py', 'archive_bootstrap')
+        cases = [('../escaped.txt', None), ('/absolute.txt', None), ('ansible/../../escaped.txt', None),
+                 ('ansible\\linked', None), ('ansible/host_vars/localhost.yml', None), ('unrelated/file', None),
+                 ('ansible/link', stat.S_IFLNK | 0o777)]
+        for index, (name, mode) in enumerate(cases):
+            with self.subTest(name=name):
+                archive, destination = self.base / f'bad-{index}.zip', self.base / f'unpack-{index}'
+                destination.mkdir()
+                entry = zipfile.ZipInfo(name)
+                if mode:
+                    entry.create_system = 3
+                    entry.external_attr = mode << 16
+                with zipfile.ZipFile(archive, 'w') as output:
+                    output.writestr(entry, 'synthetic untrusted archive member')
+                with self.assertRaises(RuntimeError):
+                    runner.unpack(archive, destination)
+                self.assertEqual(list(destination.iterdir()), [])
+        self.assertFalse((self.base / 'escaped.txt').exists())
+
+    def test_bootstrap_archive_extracts_only_declared_sources(self):
+        runner = self.load_source('host/windows/hyperv/ubuntu-26-04/configure-workstation.py', 'valid_bootstrap')
+        archive, destination = self.base / 'source.zip', self.base / 'unpacked'
+        destination.mkdir()
+        members = {'ansible/site.yml': '---\n', 'dotfiles/example.txt': 'fixture',
+                   'ansible.cfg': '[defaults]\n', 'configure-workstation.py': '# fixture'}
+        with zipfile.ZipFile(archive, 'w') as output:
+            for name, content in members.items():
+                output.writestr(name, content)
+        runner.unpack(archive, destination)
+        self.assertEqual({str(p.relative_to(destination)): p.read_text() for p in destination.rglob('*') if p.is_file()}, members)
+
+    def test_static_appearance_catalog_has_only_local_passive_assets(self):
+        root = ROOT / 'host/windows/vscode/appearance'
+        manifest = json.loads((root / 'package.json').read_text())
+        forbidden = {'main', 'browser', 'scripts', 'dependencies', 'extensionDependencies', 'extensionPack', 'activationEvents'}
+        self.assertFalse(forbidden & manifest.keys())
+        self.assertEqual(manifest['extensionKind'], ['ui'])
+        def asset(parent, relative):
+            self.assertFalse(Path(relative).is_absolute())
+            self.assertNotIn('..', Path(relative).parts)
+            path = (parent / relative).resolve()
+            self.assertTrue(path.is_relative_to(root))
+            self.assertTrue(path.is_file(), str(path))
+            self.assertFalse(path.is_symlink())
+            return path
+        themes = manifest['contributes']['themes']
+        self.assertEqual({theme['uiTheme'] for theme in themes}, {'vs', 'vs-dark'})
+        for theme in themes:
+            value = json.loads(asset(root, theme['path']).read_text())
+            self.assertTrue(value['colors'])
+            self.assertTrue(value['tokenColors'])
+        for theme in manifest['contributes']['iconThemes']:
+            path = asset(root, theme['path'])
+            data = json.loads(path.read_text())
+            definitions = data['iconDefinitions']
+            for value in definitions.values():
+                if value.get('iconPath'):
+                    ET.parse(asset(path.parent, value['iconPath']))
+            def references(value):
+                for key, child in value.items():
+                    if key == 'iconDefinitions':
+                        continue
+                    if isinstance(child, dict):
+                        references(child)
+                    elif isinstance(child, str):
+                        self.assertIn(child, definitions)
+            references({key: value for key, value in data.items() if key not in {'fonts', 'hidesExplorerArrows', 'showLanguageModeIcons'}})
+        for path in root.rglob('*'):
+            self.assertFalse(path.is_symlink())
+            if path.is_file():
+                self.assertIn(path.suffix.lower(), {'.json', '.svg', '.png', '.txt'})
+
     def test_runtime_selection(self):
         config = self.home / '.config/mise'
         config.mkdir(parents=True)
@@ -84,17 +215,17 @@ class Regressions(unittest.TestCase):
         runner = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(runner)
         base = {'git_user_name': 'Fixture', 'git_user_email': 'fixture@example.invalid'}
-        core_tags = {'shell', 'git', 'mise', 'cli_tools'}
+        core_tags = {'base', 'security', 'shell', 'git', 'mise', 'cli_tools'}
         cases = [
             ([], [], set()),
             (['php'], [], set()),
-            ([], ['browser'], {'agent_browser'}),
-            (['node'], ['audit'], {'agent_browser', 'lighthouse', 'siteone'}),
+            ([], ['browser'], {'chrome'}),
+            (['node', 'python'], ['codex', 'browser'], {'codex', 'chrome'}),
             (['node', 'python'], ['codex'], {'codex'}),
-            (['python'], ['markitdown'], {'markitdown'}),
+            ([], ['graphify'], {'graphify'}),
             (['node', 'python', 'go', 'bun', 'php'],
-             ['codex', 'docker', 'vscode', 'browser', 'audit', 'graphify', 'markitdown'],
-             {'codex', 'docker', 'vscode', 'agent_browser', 'lighthouse', 'siteone', 'graphify', 'markitdown'}),
+             ['codex', 'docker', 'vscode', 'browser', 'graphify'],
+             {'codex', 'docker', 'vscode', 'chrome', 'graphify'}),
         ]
         for languages, components, optional_tags in cases:
             with self.subTest(languages=languages, components=components):
@@ -103,44 +234,59 @@ class Regressions(unittest.TestCase):
                 self.assertEqual(settings['workstation_languages'], languages)
                 self.assertEqual(set(tags), core_tags | optional_tags)
                 self.assertEqual(len(tags), len(set(tags)))
-                self.assertEqual(settings['agent_tools_markitdown_enabled'], 'markitdown' in components)
+                self.assertEqual(settings['agent_tools_browser_enabled'], 'browser' in components)
                 self.assertNotIn('components', settings)
         for overrides in [
             {'languages': ['unknown']}, {'languages': 'python'}, {'components': ['unknown']},
             {'components': 'codex'}, {'components': ['codex'], 'languages': ['node']},
-            {'components': ['audit']}, {'components': ['markitdown']}, {'unexpected': True},
+            {'components': ['audit']}, {'components': ['markitdown'], 'languages': ['python']}, {'unexpected': True},
         ]:
             with self.subTest(invalid=overrides):
                 payload = {**base, 'languages': [], 'components': [], **overrides}
                 with self.assertRaises(RuntimeError):
                     runner.read_configuration(base64.b64encode(json.dumps(payload).encode()))
 
-    def test_browser_wrapper_guards(self):
-        native = self.base / 'native'
-        native.mkdir()
-        executable = native / 'agent-browser'
-        executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps(sys.argv[1:]))\n')
-        executable.chmod(0o755)
-        self.apply('agent_tools', {'agent_tools_browser_install_dir': str(native)}, tags='agent_browser_launcher', tasks_from='agent-browser')
-        wrapper = self.home / '.local/bin/agent-browser'
-        environment = {key: value for key, value in os.environ.items() if not key.startswith('AGENT_BROWSER_')}
-        for flags in [['--state', 'visible'], ['--state=visible']]:
-            result = subprocess.run([str(wrapper), '--session', 'fixture', 'wait', '#status', *flags], env=environment, capture_output=True, text=True, timeout=10)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout)[-len(flags):], flags)
-        for engine in ['lightpanda', 'chrome']:
-            result = subprocess.run([str(wrapper), '--session', 'fixture', 'snapshot', '--engine', engine], env=environment, capture_output=True, text=True, timeout=10)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            forwarded = json.loads(result.stdout)
-            self.assertEqual(forwarded[forwarded.index('--engine') + 1], engine)
-        for flags in [['--engine', 'foreign'], ['--engine'], ['--engine', 'chrome', '--engine=lightpanda']]:
-            result = subprocess.run([str(wrapper), '--session', 'fixture', 'snapshot', *flags], env=environment, capture_output=True, timeout=10)
-            self.assertEqual(result.returncode, 2, flags)
-        for args in [['open', 'about:blank', '--state=saved.json'], ['open', 'about:blank', '--state', 'saved.json'], ['connect', '9222'], ['close', '--all']]:
-            result = subprocess.run([str(wrapper), '--session', 'fixture', *args], env=environment, capture_output=True, text=True, timeout=10)
-            self.assertEqual(result.returncode, 2, args)
-        result = subprocess.run([str(wrapper), '--session', 'other', 'snapshot'], env={**environment, 'AGENT_BROWSER_SESSION': 'fixture'}, capture_output=True, timeout=10)
-        self.assertEqual(result.returncode, 2)
+    def test_chrome_architecture_guard(self):
+        values = {'ansible_facts': {'architecture': 'aarch64'},
+                  'agent_tools_browser_chrome_dir': str(self.home / 'chrome')}
+        self.apply('agent_tools', values, tags='chrome')
+        self.assertFalse((self.home / 'chrome').exists())
+        failed = self.apply('agent_tools', {**values, 'agent_tools_browser_enabled': True},
+                            tags='chrome', success=False)
+        self.assertIn('available only on x86_64', failed.stdout)
+        self.assertFalse((self.home / 'chrome').exists())
+
+    def test_mcp_rejects_callbacks_and_tool_errors_and_recovers_after_timeout(self):
+        client = MCP(self.base / 'protocol-peer', {'command': sys.executable,
+                     'args': [str(ROOT / 'tests/fixtures/mcp_peer.py')]}, 'http://127.0.0.1:1/*')
+        try:
+            self.assertEqual(client.request('fixture/callback', {}), {'callback_rejected': True})
+            with self.assertRaisesRegex(ToolError, 'Known fixture tool failure'):
+                client.tool('reject')
+            with self.assertRaises(TimeoutError):
+                client.request('fixture/no-response', {}, timeout=.1)
+            self.assertEqual(text(client.tool('recover')), 'Fixture recovered')
+        finally:
+            cleanup = client.close()
+        self.assertEqual(cleanup['exit_code'], 0)
+        self.assertEqual(cleanup['before_forced_cleanup'], [])
+        self.assertEqual(cleanup['remaining_owned_pids'], [])
+
+    def test_mcp_early_exit_cleanup(self):
+        client = MCP(self.base / 'exited-mcp',
+                     {'command': sys.executable, 'args': ['-c', 'raise SystemExit(23)']},
+                     'http://127.0.0.1:1/*')
+        try:
+            self.assertEqual(client.process.wait(timeout=5), 23)
+            with self.assertRaises(BrokenPipeError):
+                client.send({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}})
+        finally:
+            cleanup = client.close()
+        self.assertEqual(cleanup['exit_code'], 23)
+        self.assertEqual(cleanup['before_forced_cleanup'], [])
+        self.assertEqual(cleanup['remaining_owned_pids'], [])
+        self.assertTrue(cleanup['reader_stopped'])
+        self.assertTrue(cleanup['sampler_stopped'])
 
     def test_codex_browser_configuration(self):
         config = self.base / 'codex'
@@ -151,11 +297,20 @@ class Regressions(unittest.TestCase):
         self.apply('codex', values, tags='codex_config', unchanged=True)
         data = tomllib.loads((config / 'config.toml').read_text())
         server = data['mcp_servers']['chrome_devtools']
-        self.assertFalse(server['enabled'])
+        self.assertEqual(server['enabled'], platform.machine() == 'x86_64')
+        self.assertIn('--headless', server['args'])
+        self.assertIn('--isolated', server['args'])
+        self.assertIn('--page-id-routing', server['args'])
+        self.assertFalse(server['required'])
         self.assertIn(f'--executablePath={chrome}/chrome-linux64/chrome', server['args'])
         self.assertIn('--no-usage-statistics', server['args'])
         self.assertIn('--no-performance-crux', server['args'])
-        self.assertNotIn('playwright', data['mcp_servers'])
+        self.assertEqual(set(data['mcp_servers']), {'context7', 'chrome_devtools'})
+        for enabled in [False, True]:
+            self.apply('codex', {**values, 'agent_tools_browser_enabled': enabled}, tags='codex_config')
+            rendered = tomllib.loads((config / 'config.toml').read_text())
+            self.assertEqual(rendered['mcp_servers']['chrome_devtools']['enabled'], enabled)
+            self.apply('codex', {**values, 'agent_tools_browser_enabled': enabled}, tags='codex_config', unchanged=True)
 
         # A custom source owns its marketplace table; provisioning must not append another.
         custom = self.base / 'custom-codex.toml'
@@ -186,69 +341,6 @@ class Regressions(unittest.TestCase):
         self.apply('codex', values, tags='codex_config', unchanged=True)
         self.apply('codex', values, tasks_from='plugins', unchanged=True)
 
-    @unittest.skipUnless(OPTIONS.installed_tools, 'requires --installed-tools on a prepared VM')
-    def test_siteone_recovery_and_custom_directory(self):
-        # The real pinned archive from provisioning is reused without copying user configuration.
-        cache = Path.home() / '.local/share/workstation'
-        candidates = sorted(cache.glob('siteone-crawler-*/archive.tar.gz'))
-        self.assertTrue(candidates, 'Install SiteOne with the current checkout first')
-        archive = candidates[-1]
-        first = self.home / 'custom/siteone-a'
-        first.mkdir(parents=True)
-        (first / 'archive.tar.gz').write_bytes(archive.read_bytes())
-        binary = first / 'siteone-crawler'
-        binary.write_text('interrupted extraction')
-        binary.chmod(0o755)
-        values = {'agent_tools_siteone_dir': str(first)}
-        self.apply('agent_tools', values, tasks_from='siteone')
-        self.assertTrue(list(first.glob('.workstation-siteone-ready-*')))
-        result = subprocess.run([str(binary), '--version'], capture_output=True, text=True, timeout=10)
-        self.assertIn('Version:', result.stdout)  # Upstream prints version with exit 2.
-        self.apply('agent_tools', values, tasks_from='siteone', unchanged=True)
-        binary.unlink()
-        self.apply('agent_tools', values, tasks_from='siteone')
-        self.assertTrue(os.access(binary, os.X_OK))
-        second = self.home / 'custom/siteone-b'
-        second.mkdir()
-        (second / 'archive.tar.gz').write_bytes(archive.read_bytes())
-        values = {'agent_tools_siteone_dir': str(second)}
-        self.apply('agent_tools', values, tasks_from='siteone')
-        self.assertEqual((self.home / '.local/bin/siteone-crawler').resolve(), second / 'siteone-crawler')
-        self.apply('agent_tools', values, tasks_from='siteone', unchanged=True)
-
-    @unittest.skipUnless(OPTIONS.installed_tools, 'requires --installed-tools on a prepared VM')
-    def test_lighthouse_failed_install_and_repair(self):
-        mise = shutil.which('mise')
-        self.assertIsNotNone(mise, 'Install the workstation runtimes first')
-        prefix = self.home / 'custom/lighthouse'
-        cli = prefix / 'node_modules/lighthouse/cli/index.js'
-        fake = self.base / 'failing-mise'
-        fake.write_text(f'''#!{sys.executable}
-import os,sys
-from pathlib import Path
-if sys.argv[1:]==['where','node']:
- os.execv({mise!r}, [{mise!r}, 'where', 'node'])
-p=Path({str(cli)!r});p.parent.mkdir(parents=True,exist_ok=True);p.write_text('partial npm install')
-sys.exit(42)
-''')
-        fake.chmod(0o755)
-        values = {'agent_tools_lighthouse_dir': str(prefix), 'mise_binary': str(fake)}
-        failed = self.apply('agent_tools', values, tasks_from='lighthouse', success=False)
-        self.assertIn('42', failed.stdout)
-        self.assertTrue(cli.exists())
-        self.assertFalse(list(prefix.glob('.workstation-ready-*')))
-        values['mise_binary'] = mise
-        self.apply('agent_tools', values, tasks_from='lighthouse')
-        self.assertTrue(list(prefix.glob('.workstation-ready-*')))
-        subprocess.run([str(self.home / '.local/bin/lighthouse'), '--version'], check=True, capture_output=True, timeout=15)
-        self.apply('agent_tools', values, tasks_from='lighthouse', unchanged=True)
-        cli.unlink()
-        values['mise_binary'] = str(fake)
-        self.apply('agent_tools', values, tasks_from='lighthouse', success=False)
-        self.assertFalse(list(prefix.glob('.workstation-ready-*')), 'Old marker must be invalidated before repairing')
-        values['mise_binary'] = mise
-        self.apply('agent_tools', values, tasks_from='lighthouse')
-        subprocess.run([str(self.home / '.local/bin/lighthouse'), '--version'], check=True, capture_output=True, timeout=15)
 
 
 if __name__ == '__main__':

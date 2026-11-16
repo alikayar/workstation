@@ -1,6 +1,6 @@
 # Codex configuration
 
-The `codex` role installs a missing user-level CLI and manages its Ubuntu configuration, global instructions, command rules and draw.io plugin. It leaves existing CLI versions unchanged; see the [version policy](agent-environment.md#version-policy). Windows host configuration has a separate [setup procedure](windows.md#codex-host-setup).
+The `codex` role installs a missing user-level CLI and manages its Ubuntu configuration, global instructions, command rules and draw.io plugin. It leaves existing CLI versions unchanged; see the [version policy](maintenance.md#version-policy). Windows host configuration has a separate [setup procedure](windows.md#codex-host-setup).
 
 > **Security warning:** The Ubuntu configuration gives Codex full filesystem access inside the development VM. Review its sandbox and approval policy before applying it to a host or a machine containing sensitive data.
 
@@ -14,6 +14,8 @@ The `codex` role installs a missing user-level CLI and manages its Ubuntu config
 
 The role owns these complete files. Review [configuration ownership and source overrides](getting-started.md#configuration-ownership) before applying over personal settings. Credentials and authentication state are not provisioned. Workstation does not install or update personal/shared engineering skills.
 
+The default VM sandbox is `danger-full-access`. Its granular policy disables sandbox-approval prompts and MCP elicitations while retaining command-rule decisions. Explicit task authorization in instructions still applies; this configuration does not enforce confinement to a repository. Host Codex has different defaults; see [security boundaries](security.md).
+
 Model and reasoning defaults live in the configuration source. Desktop selections, existing conversations and project configuration can override them. Command rules complement working-tree and diff review; they do not replace it. The installed instructions require explicit authorization for validation and external actions; see [verification levels](verification.md) for Workstation's checks.
 
 ## Apply configuration
@@ -26,7 +28,7 @@ ansible-playbook ansible/site.yml --tags codex --ask-become-pass
 
 Use `--tags codex_config` for configuration only. The full `codex` tag also manages the CLI bootstrap, global instructions, rules and plugin. Start a new Codex session afterward. Applying configuration does not sign in, verify MCP connectivity or run application checks.
 
-See [MCP integrations](mcp.md) for the server catalog, optional activation and credential handling. Use [browser automation](agent-environment.md#browser-automation) for the native browser lifecycle. Application repositories own any Playwright Test dependency and E2E runner they need.
+See [MCP integrations](mcp.md) for the managed server catalog and project-specific integration ownership. Use [browser workflow](browser.md) for the native browser lifecycle. Application repositories own any Playwright Test dependency and E2E runner they need.
 
 ## draw.io plugin
 

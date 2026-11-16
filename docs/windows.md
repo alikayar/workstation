@@ -10,6 +10,7 @@ Choose the next task:
 
 | Task | Section |
 | --- | --- |
+| Find VM/image stores and retained ownership state | [Storage and records](#storage-and-ownership-records) |
 | Install or refresh the wvm launcher | [The wvm command](#the-wvm-command) |
 | Inspect resources without changing VMs | [Host diagnostics](#read-only-host-diagnostics) |
 | Start, stop or delete an existing VM | [VM lifecycle](#start-stop-and-delete-by-vm-name) |
@@ -36,9 +37,11 @@ Each VM command owns its recorded installation directory. Saved VM IDs, ownershi
 
 ## The wvm command
 
-Install wvm once from the cloned checkout in a **normal PowerShell window**:
+With Git already available, obtain the checkout and install wvm in a **normal 64-bit PowerShell window**. If you already have the checkout, enter it and preserve any local changes instead of cloning again:
 
 ~~~powershell
+git clone https://github.com/alikayar/workstation.git
+Set-Location workstation
 .\host\windows\wvm\Install-WVM.ps1
 wvm help
 wvm setup terminal    # Optional terminal setup
@@ -159,21 +162,21 @@ Every VM receives a **full copy**, not a differencing child of the base. Its VHD
 
 ## Ubuntu Server 26.04 clones
 
-`wvm create -OS ubuntu-26-04` asks for name, resources and non-root user. Defaults remain `workstation-ubuntu-26-04`, **4 CPUs / 8 GiB / 80 GiB**, user `dev`; Enter accepts each default. Explicit parameters skip their questions. The new clone path accepts 4–32 GiB RAM. Ubuntu can enable Hyper-V when absent, then asks for a Windows restart and stops without creating a VM. Windows OpenSSH Client is required. During the initial questions, Ubuntu also asks **Install the Workstation development environment too? [Y/n/hepsi]**. Enter accepts Yes; `n` skips it. Yes shows the base scope (Zsh/default shell, Git/configuration, mise/configuration and shared CLI tools), then asks for three domains:
+`wvm create -OS ubuntu-26-04` asks for name, resources and non-root user. Defaults remain `workstation-ubuntu-26-04`, **4 CPUs / 8 GiB / 80 GiB**, user `dev`; Enter accepts each default. Explicit parameters skip their questions. The new clone path accepts 4–32 GiB RAM. Ubuntu can enable Hyper-V when absent, then asks for a Windows restart and stops without creating a VM. Windows OpenSSH Client is required. During the initial questions, Ubuntu also asks **Install the Workstation development environment too? [Y/n/hepsi]**. Enter accepts Yes; `n` skips it. Yes shows the base scope (common prerequisites, Ubuntu doctor/service commands, security baseline, Zsh/default shell, Git/configuration, mise/configuration and shared CLI tools), then asks for three domains:
 
 | Domain | Choices |
 | --- | --- |
 | Language runtimes | `node`, `python`, `go`, `bun`, `php` (PHP includes Composer and build prerequisites) |
 | Development tools | `codex`, `docker`, `vscode` |
-| Helper tools | `browser`, `audit` (Lighthouse + SiteOne), `graphify`, `markitdown` |
+| Helper tools | `browser` (Chrome), `graphify` |
 
 Enter comma-separated numbers or names, for example `1,2,5` or `node,python,php`. Blank selects none in that domain; `hepsi` selects every choice in that domain. Entering `hepsi` at the initial installation question selects all domains without further selection prompts. Menus still display the complete scope. `-ConfigureWorkstation` skips only the initial yes/no question; domain choices remain interactive.
 
-Required dependencies are included and shown before confirmation: Codex adds Node/Python for its plugin/MCP setup, audit adds browser tools and Node, MarkItDown adds Python, and Graphify installs its own pinned Python runtime. The menus disclose Codex user-config/AGENTS/rules replacement and full filesystem access, browser AppArmor policy and Docker service/root-equivalent group access. The final summary requires explicit Yes to **Apply this scope inside Ubuntu? [y/N]**, then asks for Git author name/email and saves the languages and components with the VM record. Omitting an installed component does not uninstall it.
+Required dependencies are included and shown before confirmation: Codex adds Node/Python for its plugin/MCP setup, and Graphify installs its own pinned Python runtime. Selecting languages includes C/C++, make and pkg-config for native dependencies, independently of PHP. System Python is a base provisioning/tooling prerequisite. The base scope discloses key-only SSH on port 22 for the development user, disabled root login, UFW, AppArmor, automatic security updates without reboot, and a 15-character minimum for future password changes. The menus disclose Codex user-config/AGENTS/rules replacement and full filesystem access, browser AppArmor policy and Docker service/root-equivalent group access. The final summary requires explicit Yes to **Apply this scope inside Ubuntu? [y/N]**, then asks for Git author name/email and saves the languages and components with the VM record. Omitting an installed component does not uninstall it.
 
 After account finalization, SSH and network isolation are ready, the selected configuration runs automatically inside Ubuntu as its non-root user. The VM remains ready if configuration fails; rerun **wvm configure VM_NAME** to retry or opt in later. Completed configuration is skipped by ordinary create/resume; configure explicitly reapplies the saved selection and source snapshot.
 
-The host uploads only tracked ansible/dotfiles source and ansible.cfg from this checkout (including working-tree edits), excluding local host_vars/localhost.yml, Git history and credentials. A hashed source bundle is retained for repeatable retries. The guest installs ansible-core, python3-debian and sudo, then runs `ansible-playbook ansible/site.yml --tags ...` for the base and selected components only. Git identity, the selected runtime list and document-converter enablement are supplied as non-secret extra variables. The initial account password stays in Ubuntu's passwd prompt; configuration asks for that sudo password once more in the guest terminal, shares it with package installation and Ansible through process input/anonymous pipes, and never stores it in VM records, archives, command arguments or files. Workstation is not baked into the reusable base image.
+The host uploads only tracked ansible/dotfiles source and ansible.cfg from this checkout (including working-tree edits), excluding local host_vars/localhost.yml, Git history and credentials. Untracked new files are not included; ensure required source additions are tracked before packaging. A hashed source bundle is retained for repeatable retries. The guest installs ansible-core, python3-debian and sudo, then runs `ansible-playbook ansible/site.yml --tags ...` for the base and selected components only. Git identity, the selected runtime list and browser enablement are supplied as non-secret extra variables. The initial account password stays in Ubuntu's passwd prompt; configuration asks for that sudo password once more in the guest terminal, shares it with package installation and Ansible through process input/anonymous pipes, and never stores it in VM records, archives, command arguments or files. Workstation is not baked into the reusable base image.
 
 ### Base image and account finalization
 
@@ -196,9 +199,9 @@ A clone gets a new NoCloud CIDATA seed, hostname/instance ID, SSH client and pin
 | IPv6 and other IP protocols, including ICMP/ping and protocol-41 tunnels | Denied |
 | Unsolicited inbound connections | Denied, except host SSH and DHCP replies |
 
-Blocked prefixes include host IPv4 addresses and connected on-link routes, so public-address LANs are covered as well as RFC1918 networks. MAC spoofing, teaming, port mirroring and SR-IOV bypass are disabled; DHCP and router guards are enabled. Wildcard MAC ACLs are not installed: both the combined and egress-only variants broke Default Switch boot networking during live testing; the IP-only comparison restored SSH. Prior managed MAC rules are removed during the journaled update. This is TCP/UDP IP connection isolation on a shared switch, not layer-2 separation: ARP/broadcast visibility, raw Ethernet covert channels and broadcast denial of service remain outside its guarantee. A separately segmented network is needed when untrusted guests must not share layer 2. Internet access can still transmit guest data to Internet services; proxies, host-configured port forwarding and hypervisor vulnerabilities are outside this policy's guarantee.
+Blocked prefixes include host IPv4 addresses and connected on-link routes, so public-address LANs are covered as well as RFC1918 networks. MAC spoofing, teaming, port mirroring and SR-IOV bypass are disabled; DHCP and router guards are enabled. Wildcard MAC ACLs are not installed: both the combined and egress-only variants broke Default Switch boot networking during live testing; the IP-only comparison restored SSH. This is TCP/UDP IP connection isolation on a shared switch, not layer-2 separation: ARP/broadcast visibility, raw Ethernet covert channels and broadcast denial of service remain outside its guarantee. A separately segmented network is needed when untrusted guests must not share layer 2. Internet access can still transmit guest data to Internet services; proxies, host-configured port forwarding and hypervisor vulnerabilities are outside this policy's guarantee.
 
-For new image-backed clones, the policy is installed **while Off before the first guest boot**. The isolated Packer builder runs only pinned, trusted installation content and is deleted after sealing; do not run untrusted code there. Do not run untrusted code during installation. For an existing installed VM, shut it down normally, then rerun the same `wvm create -OS ubuntu-26-04` command; it installs the policy and resumes that VM without reinstalling Ubuntu or resetting the password. A running VM without a policy is refused, not forcibly stopped. A saved VM needing changes must first be resumed and shut down normally.
+For new image-backed clones, the policy is installed **while Off before the first guest boot**. The temporary Packer builder runs only pinned, trusted installation content and is deleted after sealing; do not run untrusted code there. Do not run untrusted code during installation. For an existing installed VM, shut it down normally, then rerun the same `wvm create -OS ubuntu-26-04` command; it installs the policy and resumes that VM without reinstalling Ubuntu or resetting the password. A running VM without a policy is refused, not forcibly stopped. A saved VM needing changes must first be resumed and shut down normally.
 
 `network-policy.json` records the VM, adapter, ownership token, topology and exact managed rules. Policy changes are journaled before mutation and verified by reading the adapter back. Interrupted installation leaves an `Applying` journal and the VM Off; rerun to reconcile only recorded rules. Foreign ACLs or a replaced adapter cause a refusal. An unchanged policy is not rewritten. No background service or scheduled task is installed.
 
@@ -224,11 +227,47 @@ The command downloads directly from that pinned HTTPS URL into `%ProgramData%\Wo
 
 An ISO is not an Authenticode-signed executable. The command verifies the entire ISO against Microsoft's pinned SHA256, then checks the **Microsoft Authenticode signature on the ISO's `setup.exe`**, plus the Pro edition, x64 architecture and exact image build. It never executes Windows Setup on the host. Enterprise Evaluation and Pro N media are rejected. To supply a previously downloaded copy, use `-IsoPath 'D:\ISO\Windows11-x64.iso'`; it must match the same pin. There is no caller-provided checksum override. Changing release requires reviewing and updating the media pin in the repository.
 
+## Storage and ownership records
+
+| Location | Owner and retained state |
+| --- | --- |
+| `%LOCALAPPDATA%\Workstation\bin` | The invoking user's wvm launchers and source-checkout pointer |
+| `%LOCALAPPDATA%\Workstation\Terminal` | Host terminal runtime configuration and managed startup files |
+| `%ProgramData%\Workstation\Tools` | Shared pinned Packer/tool cache |
+| `%ProgramData%\Workstation\Media` | Verified reusable installation media; shared across clones |
+| `%ProgramData%\Workstation\Images` | Protected versioned base images and `.builds` recovery state; overridable with `-ImageRoot` |
+| `%ProgramData%\Workstation\UbuntuVMs` / `WindowsVMs` | Default instance stores; overridable with `-VMRoot` |
+| Each instance directory | Guest record, independent `machines\os.vhdx`, bootstrap/recovery state and, for Ubuntu, retained client identity/source bundle |
+| `%ProgramData%\Workstation\Deletions` | Protected interrupted-delete journals keyed by VM name |
+
+Host user configuration lives in the relevant application's normal user directory, separately from the VM stores. Do not publish instance directories or include them in source archives: some retained files are private bootstrap identities. Doctor reads only its documented metadata allowlist; it is not an invitation to inspect keys or setup secrets. A cache's large size or absence from a running VM is not evidence it is disposable.
+
 ## Recovery, compatibility and validation
 
 Both guests use the same schema-1 record format with an explicit guest type. Packer prepares reusable base images; all VM creation copies a base image. There is no ISO-per-VM installer, old-record migration or compatibility dispatcher.
 
-VM IDs, ownership tokens, settings and bootstrap-source hashes are saved before mutations. Missing/replaced VMs, changed disks/records/payloads, concurrent operations and unrecorded resources are refused. Partial clone copying uses a private temporary disk and recorded source hash; no existing disk is overwritten to retry an installation. A clone's original base is needed only until the initial disk copy completes. Windows offline seeding is never repeated after the record enters its first-boot phase. Account finalization and seed cleanup can resume without resetting an already-completed password. `wvm start/stop/delete` use image-backed VM records and Ubuntu isolation checks.
+VM IDs, ownership tokens, settings and bootstrap-source hashes are saved before mutations. Missing/replaced VMs, changed disks/records/payloads, concurrent operations and unrecorded resources are refused. Partial clone copying uses a private temporary disk and recorded source hash; no existing disk is overwritten to retry an installation. A clone's original base is needed only until the initial disk copy completes. Windows offline seeding is never repeated after the record enters its first-boot phase. Account finalization and seed cleanup can resume without resetting an already-completed password. `wvm start/stop` check matching managed records and Ubuntu isolation where applicable; they also support exact unmanaged VM names. Deletion uses its recorded file plan and live reference checks, as described in [VM lifecycle](#start-stop-and-delete-by-vm-name).
+
+### Choose a recovery path
+
+First retain the installation directory, record, original source revision and error output. Use the same Windows user and exact guest/name/store as the original operation. Do not edit a phase/token/hash to bypass a refusal.
+
+| Observed failure | Safe next step | Stop condition |
+| --- | --- | --- |
+| Hyper-V enablement/restart required | Restart explicitly, then repeat the original create command | Feature state still pending or nested virtualization unavailable |
+| Download or media verification failure | Resolve connectivity or review the pinned source; repeat the same operation with retained verified caches | Checksum/signature/build mismatch; never accept an arbitrary replacement ISO |
+| Interrupted image build/publication | Repeat the original `wvm image build` or create with the same recipe/store | Missing/replaced builder, changed frozen payload or inconsistent image identity |
+| Interrupted clone copy or first boot | Repeat the original create with the same OS/name/store | Recorded disk/VM/token changed, original base missing before copy completes, or unrecorded files present |
+| Ubuntu policy incomplete/stale | Shut down normally, then repeat create/resume while Off | Foreign ACL/adapter, changed identity, or a running/saved VM requiring policy mutation |
+| Ubuntu ready, development apply failed | `wvm configure NAME`, adding the original `-VMRoot` for a custom store | Saved bundle hash changed or guest identity no longer matches |
+| Interrupted confirmed deletion | Repeat `wvm delete NAME` to resume its captured plan | A replacement VM now uses that name or another VM/checkpoint references planned files |
+| Host app settings changed concurrently | Inspect the current settings and rerun that app's setup | Invalid configuration, linked paths or an unresolved ownership conflict |
+
+A completed Ubuntu development selection is saved. `wvm configure` retries/reapplies that source snapshot; it does not offer a general component editor or refresh a recorded bundle from the latest checkout. To adopt newer workstation source on an existing guest, use the [Ubuntu update workflow](getting-started.md#update-an-existing-workstation) inside that guest. To opt in after initially declining development setup, `wvm configure` presents the selection menu.
+
+### Verification status
+
+The manual Actions matrix parses Windows sources and runs 41 isolated host/VM contract cases with Windows PowerShell 5.1 and PowerShell 7. These use temporary files, a synthetic config API peer and substituted Hyper-V inventories; see the [test architecture and execution guide](verification.md#windows-contracts). They have not yet been executed on Windows for this revision.
 
 The image/clone architecture still needs fresh Hyper-V end-to-end validation for **both OSes**, including two clones, distinct guest identities, interrupted build/publication/first-boot recovery, repeated creation and deleting a clone while keeping the base. Parser, HCL validation and mocked checks are not evidence of a live image build. Existing VM disks and state must remain unchanged during that validation.
 

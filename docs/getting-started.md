@@ -1,17 +1,30 @@
 # Set up the Ubuntu environment
 
-Run the commands in this guide **inside the Ubuntu VM** as your development user, from the Workstation repository root. If you have not connected yet, start with the [host connection guide](host.md). Ansible uses a local inventory: launching it on a host computer does not provision a remote VM.
+Run the commands in this guide **inside the Ubuntu environment** as your development user. After obtaining the checkout below, run Ansible from its repository root. If you have not connected yet, start with the [host connection guide](host.md). Ansible uses a local inventory: launching it on a host computer does not provision a remote VM.
 
 Workstation targets Ubuntu 24.04 and 26.04 LTS on a VM, physical machine or WSL 2. The machine needs internet access and a non-root user with `sudo` access. Roles support x86_64 and aarch64 assets; the full installation CI currently runs on x86_64 for both LTS releases. Other Ubuntu releases at least as new as 24.04 pass platform validation but are not CI targets. Other distributions and older Ubuntu releases are rejected before package changes.
 
 ## Install Ansible
 
-Install Ansible and the Debian support library once:
+Install Git, Ansible and the Debian support library once:
 
 ```bash
 sudo apt-get update
-sudo apt-get install --yes ansible-core python3-debian sudo
+sudo apt-get install --yes git ansible-core python3-debian sudo
 ```
+
+## Obtain the checkout
+
+For a new installation, clone inside the Ubuntu filesystem and enter the repository:
+
+```sh
+mkdir -p ~/projects
+cd ~/projects
+git clone https://github.com/alikayar/workstation.git
+cd workstation
+```
+
+If the checkout already exists, enter it and inspect local changes instead of cloning over it. Use [the update procedure](#update-an-existing-workstation) when adopting newer source. All remaining Ansible commands in this guide run from this checkout; `ansible.cfg` selects its local inventory.
 
 ## Set your Git identity
 
@@ -22,9 +35,45 @@ cp -n ansible/host_vars/localhost.example.yml ansible/host_vars/localhost.yml
 nano ansible/host_vars/localhost.yml
 ```
 
+## Choose the installation scope
+
+Direct Ansible and the Windows menu share the same role sources but select scope differently. Direct Ansible is noninteractive apart from sudo; setting a runtime list does not disable Docker, Codex or other roles. Tags select components, while each optional component's enable flag still applies.
+
+For example, merge these non-secret overrides into ignored `ansible/host_vars/localhost.yml`, preserving your Git identity:
+
+```yaml
+workstation_languages: [node, python]
+agent_tools_browser_enabled: false
+agent_tools_graphify_enabled: true
+docker_add_user_to_group: false
+workstation_security_enabled: true
+```
+
+This example narrows languages, skips managed Chrome/MCP activation and avoids adding Docker-group membership. It still installs Docker when its role is selected and does not remove existing membership/software. On ARM64, keep the architecture-derived browser default rather than forcing Chrome on. To omit a role entirely, select a reviewed tag set or use `--skip-tags`.
+
+| Scope | Tags or setting | Prerequisites and effects |
+| --- | --- | --- |
+| Common prerequisites | `base` | Installer/network/archive tools, system Python and user-session support; native build tools when any language is selected |
+| Shell | `shell` | System packages/login-shell change; mise-backed shortcuts need the runtime role |
+| Git | `git` | Required Git author name/email; replaces the managed user config |
+| Runtimes/shared tool binaries | `runtimes` or `mise` | Selected languages plus always-included CLI entries; PHP prerequisites/Composer follow PHP selection |
+| Ubuntu CLI packages/operations | `cli_tools` | APT packages, `workstation-doctor` and task service helper; see [operations](operations.md) |
+| Codex | `codex`; `codex_config` or `codex_plugins` on a prepared install | Full defaults or the named sub-scope; see [Codex ownership](codex.md) |
+| Editor machine settings | `vscode` | Adds missing Stable Remote-SSH settings; does not install the host app |
+| Containers | `docker` | Requires systemd; service and optional Docker-group access |
+| Browser | `chrome` plus `codex_config` on a prepared install | x86_64 Chrome/libraries/policy and matching MCP configuration |
+| Indexer | `graphify` with its enabled flag | Existing mise/uv; its own pinned Python |
+| Server baseline | `security`; enabled by default | Key-only SSH/UFW and other access changes; [prepare access first](security.md#ubuntu-server-baseline) |
+
+The base role runs first and accompanies full installer tags; it supplies build-essential/pkg-config when any language is selected, including Node/Python without PHP. Its system Python is a provisioning prerequisite, not an additional mise language choice. The Windows scope summary discloses these dependencies.
+
+The `agent_tools` tag selects its enabled helper-tool tasks together. A narrow configuration-only tag assumes its destination directories and tools already exist. Use the full relevant role for a first installation. These tags do not start application services, index a repository, sign in to Codex or execute application tests; Docker and the server baseline do start their managed system services.
+
 ## Apply the workstation configuration
 
-This is a fresh-install baseline. The untagged playbook installs all default-enabled roles, including all configured runtimes, VM Codex settings/plugins, Docker Engine and its user group, browser/audit tools and repository indexing. Review the sources and choose tags or overrides before applying; there are no per-package questions or automatic legacy migrations. The Windows `wvm` path asks separately for languages, development tools and helper tools, supports `hepsi` for all choices, and requires scope confirmation before running selected tags. For direct Ansible applies, `workstation_languages` in ignored host variables controls the runtime list; the default includes all five languages.
+The default security baseline switches SSH to key-only access for the development user, enables UFW with TCP/22 allowed and manages AppArmor/security updates. Establish working public-key SSH and a console recovery route first; custom SSH ports and additional users require a reviewed policy. See the [baseline and explicit opt-out](security.md#ubuntu-server-baseline).
+
+This is a fresh-install baseline. The untagged playbook installs all default-enabled roles, including the server security baseline, all configured runtimes, VM Codex settings/plugins, Docker Engine and its user group, Chrome with Chrome DevTools MCP enabled, and repository indexing. Review the sources and choose tags or overrides before applying; there are no per-package questions or automatic legacy migrations. The Windows `wvm` path asks separately for languages, development tools and helper tools, supports `hepsi` for all choices, and requires scope confirmation before running selected tags. For direct Ansible applies, `workstation_languages` in ignored host variables controls the runtime list; the default includes all five languages.
 
 Run the playbook from the repository root:
 
@@ -50,6 +99,12 @@ After Docker adds the user to its group, start a new terminal or run:
 ```bash
 newgrp docker
 ```
+
+## Recognize completion
+
+The playbook must finish without failed tasks. Open a new SSH/login session for shell and group changes. Connect to the intended VM account, confirm command resolution from the active project using the [inspection procedure](#inspect-the-agent-environment), and complete Codex/Git-host sign-in separately when needed. No credentials or application dependencies are supplied by the playbook.
+
+Use [verification](verification.md) when actual runtime, idempotency or browser evidence is requested. Installation success alone does not establish those results. An omitted component is deliberately absent from the selected scope, rather than an installation failure.
 
 ## Update an existing workstation
 
@@ -78,17 +133,17 @@ Choose the relevant scope rather than applying everything for a documentation-on
 | Git | `git` | Managed `~/.gitconfig`; existing content receives an Ansible backup. |
 | Codex settings only | `codex_config` | Replaces the complete `~/.codex/config.toml` from the configured source, including rendered browser paths. |
 | All Codex defaults | `codex` | Also replaces global AGENTS and command rules and manages the pinned plugin. |
-| Browser/Graphify/audits | `agent_browser`, `graphify`, `lighthouse`, `siteone` | Tool binaries/environments and launchers; browser setup may change libraries/AppArmor policy. |
+| Chrome/Graphify | `chrome`, `graphify` | Managed Chrome or repository indexer; Chrome setup may change libraries/AppArmor policy. |
 | Docker | `docker` | Repository, packages, service and optional Docker-group membership. |
 
-On a prepared VM, preview then apply the chosen tag; this example updates Lighthouse and SiteOne:
+On a prepared VM, preview then apply the chosen tag; this example updates Chrome and the managed Codex integration:
 
 ```sh
-ansible-playbook ansible/site.yml --tags lighthouse,siteone --check --diff --ask-become-pass
-ansible-playbook ansible/site.yml --tags lighthouse,siteone --ask-become-pass
+ansible-playbook ansible/site.yml --tags chrome,codex --check --diff --ask-become-pass
+ansible-playbook ansible/site.yml --tags chrome,codex --ask-become-pass
 ```
 
-Check mode is a preview, not proof that downloads, extraction or a live tool will work. Standalone tool tags require their documented prerequisites; use [agent environment](agent-environment.md) for browser/runtime dependencies. For a change spanning roles, review and apply the full playbook. Choose authorized [verification](verification.md) for the affected behavior; repeated apply should report `changed=0`. Open a new shell for shell/group changes and a new Codex session for configuration changes.
+Check mode is a preview, not proof that downloads, extraction or a live tool will work. Standalone tool tags require their documented prerequisites; use the [browser guide](browser.md) and [agent environment](agent-environment.md) for prerequisites. For a change spanning roles, review and apply the full playbook. Choose authorized [verification](verification.md) for the affected behavior; repeated apply should report `changed=0`. Open a new shell for shell/group changes and a new Codex session for configuration changes.
 
 ### Configuration ownership
 
@@ -98,7 +153,7 @@ Shell and Git tasks have their own backup behavior; VS Code merges its selected 
 
 ### Recover from a failed update
 
-Keep the checkout, ignored host variables, VM and application data intact. Read the failing task and preserve its output. A download/checksum failure or an unrelated-file ownership error is a stop condition; do not delete user files or bypass the guard. Fix the cause and repeat only the relevant scope. Lighthouse and SiteOne incomplete installations are repaired by their tasks; a success marker is written only after installation finishes.
+Keep the checkout, ignored host variables, VM and application data intact. Read the failing task and preserve its output. A download/checksum failure or an unrelated-file ownership error is a stop condition; do not delete user files or bypass the guard. Fix the cause and repeat only the relevant scope. An interrupted Chrome extraction is retried by its task; a success marker is written only after extraction finishes.
 
 If the new source behavior is unsuitable, first ensure the checkout is clean, then use the recorded known-good commit in a detached checkout and reapply only the reviewed scope:
 
@@ -177,7 +232,7 @@ The automatic choice is a compatibility default, not a requirement to replace a 
 
 Use a WSL 2 Ubuntu distribution and clone projects into its Linux filesystem, for example `~/projects/`, rather than a Windows-mounted project directory. Windows-specific prerequisites stay outside this Linux playbook.
 
-The Docker role installs and manages native Docker Engine through systemd. Check `ps -p 1 -o comm=` before applying it. If PID 1 is not systemd, merge the following into `/etc/wsl.conf`, preserving any existing sections:
+The default security baseline and native Docker Engine require systemd. Check `ps -p 1 -o comm=` before applying it. If PID 1 is not systemd, merge the following into `/etc/wsl.conf`, preserving any existing sections:
 
 ```ini
 [boot]
@@ -186,7 +241,7 @@ systemd=true
 
 Then run `wsl --shutdown` from Windows PowerShell and reopen Ubuntu. The Docker role reports a prerequisite error before installation when systemd is unavailable. See [Microsoft's WSL systemd instructions](https://learn.microsoft.com/en-us/windows/wsl/systemd).
 
-If you use Docker Desktop with WSL integration, let Desktop manage the engine and apply the remaining workstation roles with:
+If you use Docker Desktop with WSL integration, keep systemd available for the default security baseline. Then let Desktop manage the engine and apply the remaining workstation roles with:
 
 ```bash
 ansible-playbook ansible/site.yml --skip-tags docker --ask-become-pass

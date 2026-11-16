@@ -1,6 +1,6 @@
 # Workstation tools
 
-This inventory shows what each tool contributes and how Workstation provisions it. Versions and installation details live in the Ansible roles or linked configuration files.
+This inventory shows what each tool contributes and how Workstation provisions it. Versions and installation details live in the Ansible roles or linked configuration files. Installation scope and opt-in flags are defined in [Ubuntu setup](getting-started.md#choose-the-installation-scope); this catalog is not a promise that every listed tool is installed on every machine.
 
 ## Provisioning and agents
 
@@ -9,7 +9,6 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | Ansible (`ansible-playbook`) | Apply the workstation configuration. | Prerequisite: `ansible-core`. | [Documentation](https://docs.ansible.com/ansible/latest/) |
 | Codex CLI | Coding agent with managed configuration and rules. | `codex` role: pinned installer and dotfiles. | [Documentation](https://developers.openai.com/codex/cli) |
 | Graphify (`workstation-graphify`) | Local graph discovery with separate checkout caches and optional Codex semantic docs extraction. | `agent_tools` role: pinned isolated Graphify and mise Python; no application dependencies or upstream skill installation. | [Local workflow](agent-environment.md#repository-knowledge-indexing) |
-| MarkItDown | Local PDF/Office text extraction. | Optional isolated uv environment; reviewed package version. | [Usage](agent-environment.md#document-conversion) |
 
 ## Shell and navigation
 
@@ -48,28 +47,29 @@ This inventory shows what each tool contributes and how Workstation provisions i
 | yq | Query and transform YAML and related formats. | Pinned mise tool. | [Documentation](https://mikefarah.gitbook.io/yq/) |
 | ripgrep (`rg`) | Search source code and text. | Pinned mise tool. | [Repository](https://github.com/BurntSushi/ripgrep#user-guide) |
 | ast-grep | Structural code search and rewriting. | Pinned mise tool; use `ast-grep` to avoid Ubuntu's unrelated `sg` command. | [Documentation](https://ast-grep.github.io/guide/quick-start.html) |
+| Bitwarden Secrets Manager CLI (`bws`) | Optional secret retrieval by an explicitly configured workflow. | Shared pinned mise/aqua binary only; no account, token, login or automatic secret injection is provisioned. | [Runtime source](../dotfiles/mise/config.toml) |
 | FFmpeg / ffprobe | Audio/video processing and machine-readable media metadata. | `cli_tools` role: `ffmpeg`. | [Documentation](https://ffmpeg.org/documentation.html) |
 
 ## Diagnostics and browser tools
 
+Common installer prerequisites and selected-language C/C++ build tools are owned by the `base` role, independently of PHP/Docker selection. Project-specific libraries/toolchains remain project-owned.
+
 | Tool | Purpose | Provisioning | Reference |
 | --- | --- | --- | --- |
+| `workstation-doctor` | Read-only command/runtime resolution, user-manager, resource and local socket observations. | Shared CLI role; system Python; no repairs or installs. | [Ubuntu operations](operations.md#read-only-diagnosis) |
+| `workstation-service` | Start/status/log/stop for a UUID-owned user unit with RAM/CPU/runtime limits. | Shared CLI role; existing systemd user manager; no lingering or daemon bootstrap. | [Ubuntu operations](operations.md#start-one-owned-task-service) |
+| Chrome for Testing | Real browser rendering, screenshots and interactions controlled through Chrome DevTools MCP. | `agent_tools` role: checksum-pinned x86_64 Chrome and AppArmor namespace policy. | [Browser guide](browser.md) |
 | Ruff | Python linting and formatting when explicitly requested. | Pinned mise tool; project configuration takes precedence. | [Documentation](https://docs.astral.sh/ruff/) |
 | ShellCheck | Shell script diagnostics when explicitly requested. | Pinned mise tool. | [Repository](https://github.com/koalaman/shellcheck) |
 | actionlint | GitHub Actions workflow diagnostics when explicitly requested. | Pinned mise tool. | [Repository](https://github.com/rhysd/actionlint) |
 | hyperfine | Command timing comparisons when explicitly requested. | Pinned mise tool. | [Repository](https://github.com/sharkdp/hyperfine) |
-| agent-browser, Lightpanda, Chrome for Testing (`workstation-browser-task`) | Session-scoped automation with Lightpanda by default; explicit Chrome for visual work. | `agent_tools` role: checksum-pinned native CLI and engines on x86_64; no shared Playwright test runner. | [Browser automation](agent-environment.md#browser-automation) |
-| Lighthouse (`lighthouse`) | Native page performance, accessibility, best-practices and technical SEO reports. | `agent_tools` role: pinned official npm package, workstation Node and existing managed Chrome. | [Installation](agent-environment.md#website-audits), [upstream CLI](https://github.com/GoogleChrome/lighthouse#using-the-node-cli) |
-| SiteOne (`siteone-crawler`) | Bounded site crawling, link/metadata inventories and native JSON/HTML reports. | `agent_tools` role: checksum-pinned upstream Linux static binary (x64/ARM64), direct symlink; no runtime service or project dependency. | [Installation](agent-environment.md#website-audits), [upstream release](https://github.com/janreges/siteone-crawler/releases/tag/v2.5.1) |
 
 ## MCP integrations
 
 | Tool | Purpose | Provisioning | Reference |
 | --- | --- | --- | --- |
 | Context7 MCP | Version-specific library and framework documentation when applicable. | Codex's remote Streamable HTTP MCP configuration, no local package. | [Repository](https://github.com/upstash/context7) |
-| Chrome DevTools MCP | Chrome tracing, network and memory analysis. | Pinned `npx` package; disabled until needed. | [Repository](https://github.com/ChromeDevTools/chrome-devtools-mcp) |
-| Grafana MCP | Read-only monitoring, log and metric analysis. | Pinned `uvx` package; disabled until configured. | [Repository](https://github.com/grafana/mcp-grafana) |
-| PostgreSQL MCP | Restricted SQL and schema analysis. | Pinned `uvx` package; disabled until configured. | [Repository](https://github.com/crystaldba/postgres-mcp) |
+| Chrome DevTools MCP | Navigation, interaction, screenshots, tracing, console/network inspection and native page audits. | Pinned `npx` package; enabled with the managed browser. | [Repository](https://github.com/ChromeDevTools/chrome-devtools-mcp) |
 
 ## Implementation notes
 
@@ -84,4 +84,10 @@ Engineering skills are managed separately. Workstation provisions tools and agen
 
 APT manages Ubuntu CLI packages; mise pins shared runtimes and standalone tools. Project manifests and lockfiles own project dependencies and validation rules. Use the [verification guide](verification.md) for authorized Workstation checks; installation alone does not authorize execution.
 
-Context7 is enabled. Chrome DevTools, Grafana and PostgreSQL require explicit session activation; see [MCP guide](mcp.md).
+Context7 is enabled, and Chrome DevTools is enabled with the managed browser; see the [MCP guide](mcp.md).
+
+## Host and server tooling
+
+Windows host apps are separate from the Ubuntu catalog: `wvm setup terminal` manages terminal dependencies/appearance, `wvm setup vscode` reviews editor setup, and `wvm setup codex` configures an already installed host Codex. `wvm doctor` supplies read-only diagnostics. See the [Windows guide](windows.md) for privileges, effects and recovery.
+
+The default Ubuntu [server baseline](security.md#ubuntu-server-baseline) manages OpenSSH, UFW, AppArmor, unattended security upgrades and password quality. It can be explicitly disabled or omitted by tag; it is separate from Chrome's namespace policy and Hyper-V's host-side network rules.

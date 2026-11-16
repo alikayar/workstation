@@ -24,7 +24,7 @@ Host defaults live in `host/windows/vscode/settings.json`; remote defaults live 
 
 The Windows installer adds missing settings and skips identical values. For each different value, including nested profiles and exclusions, it shows Current/Proposed and asks `Override this value? [y/N]`. Enter keeps the current value; Yes replaces only that value. No unrequested keys are removed. Confirmed values no longer prompt on repeat; declined differences are offered again on later interactive runs. JSONC comments and trailing commas are accepted; invalid files are left untouched. A changed Windows write atomically saves the previous file as `settings.json.workstation.bak` (the latest pre-change backup) and normalizes the active file to JSON. If the file changes while setup is asking questions, setup stops so the new contents can be reviewed. Identical runs do not rewrite it.
 
-The Ubuntu Ansible role runs its helper directly from the local playbook without installing runtime helper/config copies. It supports read-only Ansible check mode, adds missing remote settings and preserves existing values without prompting. Its first-change backup is retained. Settings Sync, named profiles and workspace settings may override these defaults. Remote settings target the standard VS Code Stable SSH server.
+The Ubuntu Ansible role runs its helper directly from the local playbook without installing runtime helper/config copies. It supports read-only Ansible check mode, adds missing remote settings and preserves existing values without prompting. Its first-change `settings.json.workstation.bak` backup is retained with private permissions. Linked settings files and linked ancestors are refused before access. Settings Sync, named profiles and workspace settings may override these defaults. Remote settings target the standard VS Code Stable SSH server.
 
 The integrated browser uses remote HTTP/HTTPS proxying and workspace storage unless an existing preference overrides them. Remote proxying is a preview feature and is not a VM isolation boundary. Select ephemeral storage in VS Code for disposable browser sessions.
 
@@ -39,6 +39,10 @@ Setup copies the package into `%USERPROFILE%\.vscode\extensions\workstation-loca
 To migrate an existing setup, accept the proposed theme/icon setting replacements when running `wvm setup vscode`, restart VS Code, and confirm that Workstation Macchiato and Workstation Icons display correctly. Then uninstall `catppuccin.catppuccin-vsc` and `vscode-icons-team.vscode-icons` from the local Extensions view. Setup warns if these upstream packages are present but does not remove or disable them automatically. Selecting the local appearance alone does not remove the old packages or their update risk. Other themes and icon extensions are preserved. If an extension allowlist is configured separately, it must permit `workstation-local.appearance`.
 
 For a deliberate appearance update, review the selected upstream release, replace only the required static assets and mapping/theme data, preserve required notices, update provenance and bump the local package version. Setup will install the new version without replacing old package directories; account for and remove superseded local versions explicitly. Do not introduce an upstream installer, runtime code or automatic refresh for these assets.
+
+## Host exposure
+
+Remote-SSH keeps development processes in Ubuntu, but the Windows editor and its local extensions still have host permissions. Workstation does not block every remote-extension bridge, isolate VS Code to its own directory or enforce an extension allowlist. Static appearance reduces one dependency/update surface; it does not close all editor exposure. Use the [security boundary guide](security.md#host-applications-and-remote-execution) for the distinction.
 
 ## Resource use and privacy
 

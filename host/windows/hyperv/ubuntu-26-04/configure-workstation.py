@@ -51,8 +51,8 @@ def read_configuration(encoded_settings):
     components = settings.pop("components")
     optional_tags = {
         "codex": ["codex"], "docker": ["docker"], "vscode": ["vscode"],
-        "browser": ["agent_browser"], "audit": ["agent_browser", "lighthouse", "siteone"],
-        "graphify": ["graphify"], "markitdown": ["markitdown"],
+        "browser": ["chrome"],
+        "graphify": ["graphify"],
     }
     if (not isinstance(components, list)
             or any(not isinstance(item, str) or item not in optional_tags for item in components)):
@@ -65,17 +65,13 @@ def read_configuration(encoded_settings):
     required = set()
     if "codex" in components:
         required.update(("node", "python"))
-    if "audit" in components:
-        required.add("node")
-    if "markitdown" in components:
-        required.add("python")
     if not required.issubset(languages):
         raise RuntimeError("Selected tools are missing their required runtimes")
-    tags = ["shell", "git", "mise", "cli_tools"]
+    tags = ["base", "security", "shell", "git", "mise", "cli_tools"]
     for component in components:
         tags.extend(optional_tags[component])
     settings["workstation_languages"] = languages
-    settings["agent_tools_markitdown_enabled"] = "markitdown" in components
+    settings["agent_tools_browser_enabled"] = "browser" in components
     return settings, list(dict.fromkeys(tags))
 
 

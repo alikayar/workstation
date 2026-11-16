@@ -8,44 +8,11 @@ agent_tools_graphify_dir: >-
   {{ workstation_home }}/.local/share/workstation/graphify-{{ agent_tools_graphify_version
   }}-py{{ agent_tools_graphify_python_version }}
 
-# Document conversion is optional.
-agent_tools_markitdown_enabled: false
-# renovate: datasource=pypi depName=markitdown versioning=pep440
-agent_tools_markitdown_version: '0.1.9'
-agent_tools_markitdown_dir: "{{ workstation_home }}/.local/share/workstation/markitdown-{{ agent_tools_markitdown_version }}"
-
 # Chrome for Testing has no Linux ARM64 asset; other roles still support ARM64.
 agent_tools_browser_enabled: "{{ ansible_facts['architecture'] == 'x86_64' }}"
-agent_tools_browser_version: '0.41.2'
-agent_tools_browser_sha256: 'c4351f3802ffa5254d8c69f20a52e2fcf56925c6016fcf4203db25a07d811379'
-agent_tools_browser_install_dir: "/opt/workstation/agent-browser/{{ agent_tools_browser_version }}"
-agent_tools_browser_engine: 'lightpanda'
-agent_tools_browser_lightpanda_version: '1.0.3'
-agent_tools_browser_lightpanda_sha256: '53eb34da09159dcf8f04865dbfe3e63e9a652062684495aa7ced5ddd7c82e8b0'
-agent_tools_browser_lightpanda_dir: "{{ workstation_home }}/.local/share/workstation/lightpanda/{{ agent_tools_browser_lightpanda_version }}"
 agent_tools_browser_chrome_version: '157.0.8103.38'
 agent_tools_browser_chrome_sha256: '8cdeb344e9b2cefe59f4aea8d1d93d5d93054c03cde217665c16fc1f62e72a66'
 agent_tools_browser_chrome_dir: "/opt/workstation/chrome-for-testing/{{ agent_tools_browser_chrome_version }}"
-agent_tools_browser_output_dir: "{{ workstation_home }}/.local/share/workstation/browser-tasks"
-agent_tools_browser_idle_timeout: '5m'
-
-# Native Lighthouse CLI reuses the managed Chrome installation.
-agent_tools_lighthouse_enabled: "{{ agent_tools_browser_enabled }}"
-# renovate: datasource=npm depName=lighthouse versioning=semver
-agent_tools_lighthouse_version: '13.6.0'
-agent_tools_lighthouse_dir: "{{ workstation_home }}/.local/share/workstation/lighthouse-{{ agent_tools_lighthouse_version }}"
-
-# Native crawler; independent of Node, browser availability and application deps.
-agent_tools_siteone_enabled: true
-agent_tools_siteone_version: '2.5.1'
-agent_tools_siteone_dir: "{{ workstation_home }}/.local/share/workstation/siteone-crawler-{{ agent_tools_siteone_version }}"
-agent_tools_siteone_archives:
-  x86_64:
-    arch: x64
-    sha256: bd96b9502563aea2581fc248625871e69b60d7f1bb68a484f226c551c73706fd
-  aarch64:
-    arch: arm64
-    sha256: cad85649c09a4181ae36e47269caff647fe7e2bb556dc388b5f7aede6e420e20
 
 agent_tools_browser_packages:
   - ca-certificates

@@ -1,16 +1,19 @@
 """Local Graphify APIs with per-checkout cache; no provider or installer bootstrap."""
 import argparse
+from contextlib import contextmanager
 import fcntl
 import hashlib
 import importlib.metadata
 import json
 import os
+import re
 import signal
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from datetime import datetime, timezone
 from contextlib import redirect_stdout
 
@@ -30,6 +33,58 @@ def write_json(path, value):
             temporary.replace(path)
         finally:
             temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def writer_lock(cache, timeout):
+    with (cache / 'lock').open('a') as lock:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise ValueError('Index update already in progress; writer lock timed out. Retry later; queries do not wait for writers.')
+                time.sleep(min(.05, max(0, deadline - time.monotonic())))
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def current_index(cache):
+    pointer = cache / 'current.json'
+    if not pointer.exists():
+        return None, {}
+    if pointer.is_symlink():
+        raise ValueError('Refusing a linked index pointer')
+    value = json.loads(pointer.read_text())
+    generation = value.get('generation') if isinstance(value, dict) else None
+    if not isinstance(generation, str) or not re.fullmatch(r'[a-f0-9]{32}', generation):
+        raise ValueError('Invalid index generation; inspect the private cache before rebuilding')
+    directory = cache / 'generations' / generation
+    if directory.resolve() != directory:
+        raise ValueError('Refusing a linked index generation')
+    return directory, json.loads((directory / 'index.json').read_text())
+
+
+def publish_index(cache, semantic, graph, metadata):
+    # Immutable generations + one atomic pointer prevent mixed graph/metadata reads.
+    generations = cache / 'generations'
+    generations.mkdir(exist_ok=True, mode=0o700)
+    if generations.resolve() != generations:
+        raise ValueError('Refusing a linked generation directory')
+    identity = uuid.uuid4().hex
+    destination = generations / identity
+    with tempfile.TemporaryDirectory(prefix='.build-', dir=cache) as temporary:
+        temporary = Path(temporary)
+        write_json(temporary / 'semantic.json', semantic)
+        write_json(temporary / 'graph.json', graph)
+        write_json(temporary / 'index.json', {**metadata, 'graph': str(destination / 'graph.json')})
+        temporary.rename(destination)
+    write_json(cache / 'current.json', {'generation': identity})
+    return destination
 
 
 def sources(root):
@@ -155,6 +210,7 @@ def codex_semantics(root, cache, documents, spec):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--lock-timeout', type=float, default=5, help='Maximum seconds to wait for another index writer (0-300)')
     parser.add_argument('--root', type=Path, default=Path.cwd(), help='Git checkout; defaults to current checkout')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('info', help='Show paths, scope and installed extraction spec')
@@ -173,6 +229,8 @@ def main():
     path.add_argument('source')
     path.add_argument('target')
     args = parser.parse_args()
+    if not 0 <= args.lock_timeout <= 300:
+        parser.error('--lock-timeout must be between 0 and 300 seconds')
     root = Path(subprocess.check_output(
         ['git', '-C', str(args.root), 'rev-parse', '--show-toplevel'], text=True).strip()).resolve()
     cache = Path.home() / '.cache/workstation/graphify' / hashlib.sha256(os.fsencode(root)).hexdigest()
@@ -184,14 +242,15 @@ def main():
     import graphify
     info = {'root': str(root), 'cache': str(cache), 'graph': str(cache / 'graph.json'), 'version': version,
             'extraction_spec': str(Path(graphify.__file__).parent / 'skills/codex/references/extraction-spec.md')}
-    with (cache / 'lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        previous = json.loads((cache / 'index.json').read_text()) if (cache / 'index.json').exists() else {}
-        if args.command == 'info':
-            print(json.dumps({**info, 'index': previous or None}, ensure_ascii=False, indent=2))
-            return
-        paths, signatures = sources(root)
-        if args.command in {'index', 'update'}:
+    directory, previous = current_index(cache)
+    info['graph'] = str(directory / 'graph.json') if directory else None
+    if args.command == 'info':
+        print(json.dumps({**info, 'index': previous or None}, ensure_ascii=False, indent=2))
+        return
+    paths, signatures = sources(root)
+    if args.command in {'index', 'update'}:
+        with writer_lock(cache, args.lock_timeout):
+            directory, previous = current_index(cache)
             if sum([bool(args.semantic), args.structure_only, args.docs is not None]) > 1:
                 parser.error('Choose --docs, --semantic or --structure-only')
             semantic = {'nodes': [], 'edges': [], 'hyperedges': []}
@@ -207,14 +266,14 @@ def main():
                     parser.error('--docs path does not exist')
                 documents = [p for p in paths if p.suffix.lower() in {'.md', '.mdx', '.markdown'} and any(p == s or p.is_relative_to(s) for s in scopes)]
                 semantic_files = {str(p.relative_to(root)): signatures[str(p.relative_to(root))] for p in documents}
-                if previous.get('version') == version and previous.get('semantic_selection') is not None and previous.get('semantic_files') == semantic_files and (cache / 'semantic.json').exists():
-                    semantic = json.loads((cache / 'semantic.json').read_text())
+                if previous.get('version') == version and previous.get('semantic_selection') is not None and previous.get('semantic_files') == semantic_files and directory and (directory / 'semantic.json').exists():
+                    semantic = json.loads((directory / 'semantic.json').read_text())
                 else:
                     semantic, semantic_calls = codex_semantics(root, cache, documents, Path(info['extraction_spec']))
             elif args.semantic:
                 semantic = json.loads(args.semantic.read_text())
-            elif not args.structure_only and (cache / 'semantic.json').exists():
-                semantic = json.loads((cache / 'semantic.json').read_text())
+            elif not args.structure_only and directory and (directory / 'semantic.json').exists():
+                semantic = json.loads((directory / 'semantic.json').read_text())
                 if any(signatures.get(p) != stamp for p, stamp in previous.get('semantic_sources', {}).items()):
                     parser.error('Semantic sources changed: regenerate --semantic JSON, or explicitly use --structure-only')
             if not isinstance(semantic, dict):
@@ -258,22 +317,20 @@ def main():
                         'semantic_selection': [str(p.relative_to(root)) for p in scopes] if use_codex else None,
                         'semantic_files': semantic_files, 'semantic_calls': semantic_calls,
                         'scope': 'AST + Markdown structure' + (' + assistant semantics' if semantic_sources else '')}
-            write_json(cache / 'semantic.json', semantic)
-            write_json(cache / 'graph.json', json_graph.node_link_data(graph, edges='links'))
-            write_json(cache / 'index.json', metadata)
-            print(json.dumps({k: v for k, v in metadata.items() if k != 'files'}, ensure_ascii=False, indent=2))
+            destination = publish_index(cache, semantic, json_graph.node_link_data(graph, edges='links'), metadata)
+            print(json.dumps({**{k: v for k, v in metadata.items() if k != 'files'},
+                              'graph': str(destination / 'graph.json')}, ensure_ascii=False, indent=2))
             return
-        if previous.get('version') != version or previous.get('files') != signatures or not (cache / 'graph.json').exists():
-            parser.error('Index missing or stale; run workstation-graphify index/update first')
-        # Call genuine query dispatch, bypassing upstream global skill refresh/provider bootstrap.
-        from graphify.cli import dispatch_command
-        forwarded = [args.question, '--budget', str(args.budget), '--depth', str(args.depth)] if args.command == 'query' else (
-            [args.node] if args.command == 'explain' else [args.source, args.target, '--directed'])
-        if args.command == 'query' and args.dfs:
-            forwarded.append('--dfs')
-        sys.argv = ['graphify', args.command, *forwarded, '--graph', str(cache / 'graph.json')]
-        dispatch_command(args.command)
-
+    if previous.get('version') != version or previous.get('files') != signatures or not directory or not (directory / 'graph.json').exists():
+        parser.error('Index missing or stale; run workstation-graphify index/update first')
+    # Call genuine query dispatch, bypassing upstream global skill refresh/provider bootstrap.
+    from graphify.cli import dispatch_command
+    forwarded = [args.question, '--budget', str(args.budget), '--depth', str(args.depth)] if args.command == 'query' else (
+        [args.node] if args.command == 'explain' else [args.source, args.target, '--directed'])
+    if args.command == 'query' and args.dfs:
+        forwarded.append('--dfs')
+    sys.argv = ['graphify', args.command, *forwarded, '--graph', str(directory / 'graph.json')]
+    dispatch_command(args.command)
 
 def interrupt(signum, frame):
     raise KeyboardInterrupt
@@ -284,7 +341,7 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('workstation-graphify: interrupted; prior index retained', file=sys.stderr)
+        print('workstation-graphify: interrupted; only fully published snapshots are visible', file=sys.stderr)
         raise SystemExit(130)
     except (OSError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print(f'workstation-graphify: {error}', file=sys.stderr)

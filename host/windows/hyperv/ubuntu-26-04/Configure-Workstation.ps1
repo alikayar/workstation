@@ -26,20 +26,20 @@ function Read-WorkstationConfiguration([switch]$Enable) {
     }
     $name='';$email='';$languages=@();$components=@()
     if($enabled){
-        Write-Host 'Base: Zsh/default shell, Git/config, mise/config and shared CLI tools.'
+        Write-Host 'Base: common installer prerequisites, Ubuntu doctor/service commands, security baseline, Zsh/default shell, Git/config, mise/config and shared CLI tools.'
+        Write-Host 'Security: key-only SSH for this user on port 22, root login disabled, UFW firewall, AppArmor, automatic security updates without reboot, and 15-character minimum for future password changes.'
         $languages=@(Read-WorkstationSelection 'Language runtimes' @('node','python','go','bun','php') @('Node.js','Python','Go','Bun','PHP + Composer and build prerequisites') -All:$all)
+        if($languages.Count){Write-Host 'Selected languages include native dependency build tools (C/C++, make, pkg-config); system Python is part of the base.'}
         $components=@(Read-WorkstationSelection 'Development tools' @('codex','docker','vscode') @('VM Codex with full filesystem access, config/AGENTS/rules replacement and draw.io; includes Node/Python','Docker Engine/service and root-equivalent docker group membership','Remote VS Code server settings; no host installation') -All:$all)
-        $components+=@(Read-WorkstationSelection 'Helper tools' @('browser','audit','graphify','markitdown') @('Lightpanda, Chrome, agent-browser and AppArmor policy','Lighthouse + SiteOne; includes browser tools and Node','Repository indexing with its own pinned Python runtime','Document converter; includes Python') -All:$all)
+        $components+=@(Read-WorkstationSelection 'Helper tools' @('browser','graphify') @('Chrome and AppArmor policy; enables DevTools when Codex is selected','Repository indexing with its own pinned Python runtime') -All:$all)
         $required=@()
         if('codex' -in $components){$required+=@('node','python')}
-        if('audit' -in $components){$required+='node'}
-        if('markitdown' -in $components){$required+='python'}
         $added=@($required | Where-Object {$_ -notin $languages} | Select-Object -Unique)
         $languages=@(@($languages)+$required | Select-Object -Unique)
-        if($added.Count){Write-Host ('Required runtimes added for selected tools: '+($added -join ', '))}
+        if($added.Count){Write-Host ('Required runtimes added for selected tools: '+($added -join ', '));Write-Host 'Native dependency build tools (C/C++, make, pkg-config) are included.'}
         Write-Host ('Selected languages: '+$(if($languages.Count){$languages -join ', '}else{'none'}))
         Write-Host ('Selected tools: '+$(if($components.Count){$components -join ', '}else{'none'}))
-        Write-Host 'The base environment is included. PHP includes Composer/build dependencies; audit includes browser tools. Omitted choices do not uninstall existing software.'
+        Write-Host 'The base environment is included. PHP includes Composer/build dependencies. Omitted choices do not uninstall existing software.'
         do {$answer=(Read-Host 'Apply this scope inside Ubuntu? [y/N]').Trim()} while($answer -notmatch '^(|y|yes|n|no)$')
         $enabled=$answer -match '^(y|yes)$'
         if($enabled){

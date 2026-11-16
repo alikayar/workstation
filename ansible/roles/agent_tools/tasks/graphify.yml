@@ -84,6 +84,7 @@
     src: workstation-graphify.py.j2
     dest: "{{ agent_tools_graphify_dir }}/workstation-graphify.py"
     mode: '0600'
+  tags: [graphify_config]
 
 - name: Install the managed Graphify launcher
   become: false

@@ -10,8 +10,10 @@
       tags: [always]
 
   roles:
+    - role: base
+      tags: [base, shell, zsh, codex, mise, runtimes, php, cli, cli_tools, docker, containers, agent_tools, graphify, chrome]
     - role: security
-      when: workstation_security_enabled | default(false) | bool
+      when: workstation_security_enabled | bool
       tags: [security]
     - role: shell
       tags: [shell, zsh]

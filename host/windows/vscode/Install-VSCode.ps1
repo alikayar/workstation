@@ -184,8 +184,8 @@ function Get-VSCodeExtensions([string]$CodePath) {
     return $installed
 }
 function Install-WorkstationAppearance {
+    param([string]$ExtensionsRoot = (Join-Path $HOME '.vscode\extensions'))
     $source = Join-Path $PSScriptRoot 'appearance'
-    $extensionsRoot = Join-Path $HOME '.vscode\extensions'
     # Refuse linked ancestors as well as linked package contents before copying.
     foreach ($root in @($source, $extensionsRoot)) {
         $cursor = $root

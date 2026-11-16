@@ -11,13 +11,15 @@ This repository provisions an Ubuntu VM/WSL development environment. Run Ansible
 
 ## Owners and guides
 
+Start at the [documentation home](docs/index.md); [architecture](docs/architecture.md) maps configuration ownership, [security](docs/security.md) defines boundaries, and [maintenance](docs/maintenance.md) owns upgrade policy.
+
 | Area | Source and guide |
 | --- | --- |
 | Ubuntu provisioning | `ansible/`; [setup](docs/getting-started.md) |
 | Installed agent defaults | `dotfiles/codex/`; [Codex](docs/codex.md), [MCP](docs/mcp.md) |
 | Shell and runtimes | `dotfiles/`, Ansible roles; [shell](docs/shell.md), [tools](docs/tools.md) |
 | Windows setup and VM lifecycle | `host/windows/`; [source ownership](docs/windows.md#source-layout), [recovery](docs/windows.md#recovery-compatibility-and-validation) |
-| Connections and process lifetime | [Host guide](docs/host.md); record owned services, ports, logs and stop commands |
-| Browser, conversion and repository indexing | `agent_tools` role; [agent environment](docs/agent-environment.md) |
+| Connections and process lifetime | [Host guide](docs/host.md), [Ubuntu operations](docs/operations.md); record owned services, ports, logs and stop commands |
+| Browser and repository indexing | `agent_tools` role; [browser](docs/browser.md), [agent environment](docs/agent-environment.md) |
 
 Keep this file to maintenance rules and routing. `dotfiles/codex/AGENTS.md` supplies portable VM instructions; existing `docs/` pages own detailed procedures. Keep one maintained guide per topic. Model defaults belong in config, command safeguards in rules; neither configuration nor an installed MCP proves a tool is exposed in the current chat. Do not add blanket approval rules or assume changed defaults affect an existing session.

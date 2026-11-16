@@ -2,14 +2,23 @@ name: CI
 
 on:
   pull_request:
-    paths: ['ansible/**', 'dotfiles/**', 'tests/**', 'docs/**', 'README.md', 'AGENTS.md', 'ansible.cfg', '.github/**']
+    paths: ['ansible/**', 'dotfiles/**', 'tests/**', 'docs/**', 'README.md', 'AGENTS.md', 'ansible.cfg', '.github/**', 'host/windows/**']
   push:
     branches: [main]
-    paths: ['ansible/**', 'dotfiles/**', 'tests/**', 'docs/**', 'README.md', 'AGENTS.md', 'ansible.cfg', '.github/**']
+    paths: ['ansible/**', 'dotfiles/**', 'tests/**', 'docs/**', 'README.md', 'AGENTS.md', 'ansible.cfg', '.github/**', 'host/windows/**']
   workflow_dispatch:
     inputs:
+      scope:
+        description: Select all checks/install jobs or Windows PowerShell contracts only
+        type: choice
+        options: [all, windows]
+        default: all
       browser:
-        description: Run loopback browser smoke checks after Ubuntu provisioning
+        description: Run real Chrome + DevTools MCP loopback smoke checks after provisioning
+        type: boolean
+        default: false
+      browser_battle:
+        description: Also run known-fault, SIGTERM and fresh-process browser recovery checks
         type: boolean
         default: false
 
@@ -18,6 +27,7 @@ permissions:
 
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -37,12 +47,26 @@ jobs:
         run: |
           python3 - <<'PYTHON'
           from pathlib import Path
-          for path in Path('tests').glob('*.py'):
-              compile(path.read_bytes(), str(path), 'exec')
+          for root in ['tests', 'ansible/roles/cli_tools/files', 'ansible/roles/vscode/files', 'host/windows/hyperv/ubuntu-26-04', 'benchmarks/code-discovery']:
+              for path in Path(root).rglob('*.py'):
+                  compile(path.read_bytes(), str(path), 'exec')
           PYTHON
 
+      - name: Exercise isolated configuration regressions
+        run: python3 tests/regressions.py --output "${RUNNER_TEMP}/source-regressions"
+      - name: Retain configuration regression evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: configuration-regressions
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/source-regressions/result.json
+            ${{ runner.temp }}/source-regressions/**/apply-*.log
+
   ansible:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.scope != 'windows'
     needs: checks
     strategy:
       fail-fast: false
@@ -85,9 +109,20 @@ jobs:
 
       - name: Exercise isolated installation regressions
         run: '"$HOME/.local/bin/mise" exec -- python3 tests/regressions.py --installed-tools --output "${RUNNER_TEMP}/regressions"'
-      - name: Exercise loopback browser workflow
-        if: inputs.browser
-        run: '"$HOME/.local/bin/mise" exec -- python3 tests/browser_smoke.py --output "${RUNNER_TEMP}/browser-smoke"'
+      - name: Prepare the pinned MCP package cache explicitly
+        if: inputs.browser || inputs.browser_battle
+        run: '"$HOME/.local/bin/mise" exec -- python3 tests/browser_smoke.py --prepare-dependencies --output "${RUNNER_TEMP}/browser-dependencies"'
+      - name: Exercise loopback Chrome and MCP workflow
+        if: inputs.browser || inputs.browser_battle
+        shell: bash
+        env:
+          BROWSER_BATTLE: ${{ inputs.browser_battle }}
+        run: |
+          browser_args=(--output "${RUNNER_TEMP}/browser-smoke")
+          if [[ "$BROWSER_BATTLE" == true ]]; then
+            browser_args+=(--battle)
+          fi
+          "$HOME/.local/bin/mise" exec -- python3 tests/browser_smoke.py "${browser_args[@]}"
       - name: Retain verification evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -99,10 +134,19 @@ jobs:
             ${{ runner.temp }}/workstation-second-run.log
             ${{ runner.temp }}/regressions/result.json
             ${{ runner.temp }}/regressions/**/apply-*.log
-            ${{ runner.temp }}/browser-smoke/*.json
-            ${{ runner.temp }}/browser-smoke/*.html
-            ${{ runner.temp }}/browser-smoke/*.png
-            ${{ runner.temp }}/browser-smoke/*.log
+            ${{ runner.temp }}/browser-dependencies/prepare.log
+            ${{ runner.temp }}/browser-smoke/result.json
+            ${{ runner.temp }}/browser-smoke/render.log
+            ${{ runner.temp }}/browser-smoke/*/checks.json
+            ${{ runner.temp }}/browser-smoke/*/cleanup.json
+            ${{ runner.temp }}/browser-smoke/*/initialize.json
+            ${{ runner.temp }}/browser-smoke/*/tools.json
+            ${{ runner.temp }}/browser-smoke/*/mcp.jsonl
+            ${{ runner.temp }}/browser-smoke/*/mcp.stderr.log
+            ${{ runner.temp }}/browser-smoke/*/trace.json
+            ${{ runner.temp }}/browser-smoke/*/*.png
+            ${{ runner.temp }}/browser-smoke/*/audit-*/*.json
+            ${{ runner.temp }}/browser-smoke/*/audit-*/*.html
       - name: Publish verification summary
         if: always()
         shell: bash
@@ -110,7 +154,7 @@ jobs:
           {
             echo "### Ubuntu verification: ${{ matrix.os }}"
             echo 'Source checks, full provisioning, second-apply idempotency and isolated regressions are separate steps above.'
-            echo 'Browser smoke runs only when selected. This job does not verify Windows, WSL or ARM64.'
+            echo 'Browser smoke/battle runs only when selected. Screenshots need visual review. This job does not verify Windows, WSL, ARM64 or native-VM sandbox enforcement.'
           } >> "$GITHUB_STEP_SUMMARY"
 
   windows-powershell:
@@ -131,10 +175,22 @@ jobs:
       - name: Parse Windows scripts
         run: |
           $ErrorActionPreference = 'Stop'
-          $files = @(Get-ChildItem host/windows -Filter '*.ps1' -Recurse)
+          $files = @(Get-ChildItem host/windows,tests/windows -Filter '*.ps1' -Recurse)
           foreach ($file in $files) {
             $tokens = $null
             $parseErrors = $null
             $null = [Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors) { throw "$($file.FullName): $($parseErrors[0].Message)" }
           }
+      - name: Exercise Windows host and VM contracts
+        run: '& .\tests\windows\Run-Tests.ps1 -Output (Join-Path $env:RUNNER_TEMP "windows-contracts")'
+      - name: Retain Windows contract evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-contracts-${{ matrix.shell }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/windows-contracts/result.json
+            ${{ runner.temp }}/windows-contracts/case-*/case.log

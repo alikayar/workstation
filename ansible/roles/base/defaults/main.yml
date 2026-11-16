@@ -1,0 +1,17 @@
+---
+# Install before any upstream installer, independently of Docker/PHP selection.
+base_packages:
+  - ca-certificates
+  - curl
+  - tar
+  - gzip
+  - xz-utils
+  - unzip
+  - python3
+  - procps
+  - iproute2
+  - dbus-user-session
+
+base_native_packages:
+  - build-essential
+  - pkg-config

@@ -32,6 +32,11 @@ def merge_missing(current, defaults):
             changed = merge_missing(current[key], value) or changed
     return changed
 
+def assert_independent_path(path):
+    for candidate in (path.absolute(), *path.absolute().parents):
+        if candidate.is_symlink():
+            raise ValueError("Refusing a symlinked settings path")
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("settings", type=Path)
@@ -39,8 +44,7 @@ def main():
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     path = args.settings
-    if path.is_symlink():
-        raise ValueError("Refusing a symlinked settings file")
+    assert_independent_path(path)
     original = path.read_text(encoding="utf-8-sig") if path.exists() else None
     current = read_settings(original) if original is not None else {}
     defaults = read_settings(args.defaults.read_text(encoding="utf-8-sig"))
@@ -48,6 +52,7 @@ def main():
         print("unchanged")
         return
     if not args.check:
+        assert_independent_path(path)
         latest = path.read_text(encoding="utf-8-sig") if path.exists() else None
         if path.is_symlink() or latest != original:
             raise RuntimeError("VS Code settings changed during setup; rerun to review them")
@@ -67,6 +72,7 @@ def main():
                 temporary = output.name
                 json.dump(current, output, indent=4, ensure_ascii=False)
                 output.write("\n")
+            assert_independent_path(path)
             latest = path.read_text(encoding="utf-8-sig") if path.exists() else None
             if path.is_symlink() or latest != original:
                 raise RuntimeError("VS Code settings changed during setup; rerun to review them")

@@ -1,0 +1,99 @@
+---
+- name: Require the supported local Chrome architecture
+  ansible.builtin.assert:
+    that: ansible_facts['architecture'] == 'x86_64'
+    fail_msg: The pinned local Chrome for Testing package is available only on x86_64; disable agent_tools_browser_enabled on ARM64.
+
+- name: Install browser runtime libraries and archive support
+  become: true
+  ansible.builtin.apt:
+    name: "{{ agent_tools_browser_packages }}"
+    state: present
+
+- name: Create protected browser installation directories
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ agent_tools_browser_chrome_dir }}"
+    - /var/cache/workstation
+
+- name: Download the checksum-pinned Chrome for Testing archive
+  become: true
+  ansible.builtin.get_url:
+    url: "https://storage.googleapis.com/chrome-for-testing-public/{{ agent_tools_browser_chrome_version }}/linux64/chrome-linux64.zip"
+    dest: "/var/cache/workstation/chrome-{{ agent_tools_browser_chrome_version }}.zip"
+    checksum: "sha256:{{ agent_tools_browser_chrome_sha256 }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Read Chrome extraction completion
+  become: true
+  ansible.builtin.stat:
+    path: "{{ agent_tools_browser_chrome_dir }}/.workstation-ready-{{ agent_tools_browser_chrome_sha256 }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: agent_tools_browser_chrome_ready
+
+- name: Read the managed Chrome executable
+  become: true
+  ansible.builtin.stat:
+    path: "{{ agent_tools_browser_chrome_dir }}/chrome-linux64/chrome"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  register: agent_tools_browser_chrome_binary
+
+- name: Extract a new or interrupted Chrome installation
+  become: true
+  ansible.builtin.unarchive:
+    src: "/var/cache/workstation/chrome-{{ agent_tools_browser_chrome_version }}.zip"
+    dest: "{{ agent_tools_browser_chrome_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+  when:
+    - not ansible_check_mode
+    - >-
+      not agent_tools_browser_chrome_ready.stat.exists or
+      not agent_tools_browser_chrome_binary.stat.exists
+
+- name: Mark successful Chrome extraction
+  become: true
+  ansible.builtin.copy:
+    content: "{{ agent_tools_browser_chrome_sha256 }}\n"
+    dest: "{{ agent_tools_browser_chrome_dir }}/.workstation-ready-{{ agent_tools_browser_chrome_sha256 }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Allow user namespaces only for the managed Chrome executable
+  become: true
+  ansible.builtin.template:
+    src: chrome.apparmor.j2
+    dest: /etc/apparmor.d/workstation-chrome
+    owner: root
+    group: root
+    mode: '0644'
+  when: ansible_facts['apparmor']['status'] | default('disabled') == 'enabled'
+
+- name: Load the managed browser AppArmor policy, including after an interrupted apply
+  become: true
+  ansible.builtin.command:
+    argv:
+      - /sbin/apparmor_parser
+      - -r
+      - /etc/apparmor.d/workstation-chrome
+  # Kernel policy is derived state; file changes are reported by the template task.
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - ansible_facts['apparmor']['status'] | default('disabled') == 'enabled'
