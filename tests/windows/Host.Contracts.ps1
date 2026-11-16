@@ -23,7 +23,10 @@ function Invoke-ConfigScenario($Scenario) {
     try {
         $env:WORKSTATION_CODEX_TEST_CASE = $fixture
         Set-CodexConfig $ConfigPeer $Scenario.directory
-    } finally { [Environment]::SetEnvironmentVariable('WORKSTATION_CODEX_TEST_CASE', $prior, 'Process') }
+    } finally {
+        [Environment]::SetEnvironmentVariable('WORKSTATION_CODEX_TEST_CASE', $prior, 'Process')
+        if (Test-Path -LiteralPath $Scenario.exited) { Write-Host ('Synthetic peer: ' + [IO.File]::ReadAllText($Scenario.exited)) }
+    }
 }
 function Read-ConfigEdits($Scenario) {
     $requests = @([IO.File]::ReadAllLines($Scenario.capture) | ForEach-Object { ConvertFrom-CodexJSON $_ })
@@ -280,7 +283,9 @@ Add-Case 'Terminal default profile preserves comments, nested settings and idemp
 }
 Add-Case 'Terminal file updates preserve identical bytes and leave no temporary files' {
     param($directory)
-    $path = Join-Path $directory 'settings.json'
+    $settingsDirectory = Join-Path $directory 'settings'
+    $null = [IO.Directory]::CreateDirectory($settingsDirectory)
+    $path = Join-Path $settingsDirectory 'settings.json'
     Write-ChangedText $path '{"fixture":1}'
     $stamp = [datetime]::SpecifyKind([datetime]'2020-01-01', [DateTimeKind]::Utc)
     [IO.File]::SetLastWriteTimeUtc($path, $stamp)
@@ -288,7 +293,7 @@ Add-Case 'Terminal file updates preserve identical bytes and leave no temporary 
     Assert-Equal ([IO.File]::GetLastWriteTimeUtc($path).Ticks) $stamp.Ticks
     Write-ChangedText $path '{"fixture":2}'
     Assert-Equal ([IO.File]::ReadAllText($path)) '{"fixture":2}'
-    Assert-Equal @(Get-ChildItem -LiteralPath $directory -Force).Count 1
+    Assert-Equal @(Get-ChildItem -LiteralPath $settingsDirectory -Force).Count 1
 }
 Add-Case 'Dispatcher help and invalid arguments terminate before external operations' {
     param($directory)

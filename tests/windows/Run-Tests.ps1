@@ -99,6 +99,8 @@ foreach ($case in $Cases) {
         Write-Host ('PASS ' + $case.Name)
     } catch {
         $record.error = $_.Exception.Message
+        $record.stack = $_.ScriptStackTrace
+        $record.errorId = $_.FullyQualifiedErrorId
         Write-Host ('FAIL ' + $case.Name + ': ' + $_.Exception.Message)
     }
     $record.seconds = ([DateTime]::UtcNow - $started).TotalSeconds

@@ -34,6 +34,9 @@ class CodexConfigServer {
                 Console.Out.Flush();
             }
             return 0;
-        } finally { File.WriteAllText((string)fixture["exited"], "EOF"); }
+        } catch (Exception error) {
+            File.AppendAllText((string)fixture["exited"], error.GetType().FullName + ": " + error.Message + "\n");
+            return 66;
+        } finally { File.AppendAllText((string)fixture["exited"], "EOF"); }
     }
 }
