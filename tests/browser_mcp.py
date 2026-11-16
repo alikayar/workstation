@@ -142,14 +142,18 @@ class MCP:
             self.protocol.write(json.dumps({'received': value}) + '\n')
             self.protocol.flush()
             if 'method' in value and 'id' in value:
-                self.send({'jsonrpc': '2.0', 'id': value['id'], 'error': {'code': -32601, 'message': 'No client callbacks'}})
+                if value['method'] == 'roots/list':
+                    self.send({'jsonrpc': '2.0', 'id': value['id'], 'result': {
+                        'roots': [{'uri': self.output.resolve().as_uri(), 'name': 'Workstation task artifacts'}]}})
+                else:
+                    self.send({'jsonrpc': '2.0', 'id': value['id'], 'error': {'code': -32601, 'message': 'No client callbacks'}})
             if value.get('id') == identity and ('result' in value or 'error' in value):
                 if 'error' in value:
                     raise ToolError(str(value['error']))
                 return value['result']
 
     def initialize(self):
-        result = self.request('initialize', {'protocolVersion': '2024-11-05', 'capabilities': {},
+        result = self.request('initialize', {'protocolVersion': '2024-11-05', 'capabilities': {'roots': {'listChanged': False}},
                                               'clientInfo': {'name': 'workstation-browser-tests', 'version': '1'}})
         self.send({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
         tools = self.request('tools/list', {})

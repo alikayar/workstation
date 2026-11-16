@@ -261,6 +261,8 @@ class Regressions(WorkstationContracts, unittest.TestCase):
                      'args': [str(ROOT / 'tests/fixtures/mcp_peer.py')]}, 'http://127.0.0.1:1/*')
         try:
             self.assertEqual(client.request('fixture/callback', {}), {'callback_rejected': True})
+            self.assertEqual(client.request('fixture/roots', {}), {'roots': [
+                {'uri': client.output.resolve().as_uri(), 'name': 'Workstation task artifacts'}]})
             with self.assertRaisesRegex(ToolError, 'Known fixture tool failure'):
                 client.tool('reject')
             with self.assertRaises(TimeoutError):

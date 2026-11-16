@@ -18,6 +18,9 @@ for line in sys.stdin:
         send({'jsonrpc': '2.0', 'id': 900, 'method': 'sampling/createMessage', 'params': {}})
         answer = json.loads(sys.stdin.readline())
         result = {'callback_rejected': answer.get('error', {}).get('code') == -32601}
+    elif method == 'fixture/roots':
+        send({'jsonrpc': '2.0', 'id': 901, 'method': 'roots/list', 'params': {}})
+        result = json.loads(sys.stdin.readline())['result']
     elif method == 'tools/call' and request['params']['name'] == 'reject':
         result = {'isError': True, 'content': [{'type': 'text', 'text': 'Known fixture tool failure'}]}
     else:

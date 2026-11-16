@@ -104,7 +104,7 @@ The automatic Ubuntu source job also exposed Python 3.12's TOML 1.0 parser rejec
 
 ## Browser setup and execution
 
-Use a prepared Linux x86_64 workstation with the current checkout's managed Chrome, Ansible, Node/npm and Python. The browser suite renders the real Codex template into its artifact directory and reads only that generated configuration. It does not read a user's Codex configuration, copy login state, run Codex model calls or use the current chat's MCP connection. It checks the actual Chrome version and the MCP's runtime version against the managed pins.
+Use a prepared Linux x86_64 workstation with the current checkout's managed Chrome, Ansible, Node/npm and Python. The browser suite renders the real Codex template into its artifact directory and reads only that generated configuration. Its MCP client negotiates roots support and answers `roots/list` with only that attempt's private artifact directory; unknown callbacks remain rejected. Battle verifies that a write outside that declared root is denied. No unrestricted-path server flag is enabled, including when a CI artifact path lies outside the OS temp directory. It does not read a user's Codex configuration, copy login state, run Codex model calls or use the current chat's MCP connection. It checks the actual Chrome version and the MCP's runtime version against the managed pins.
 
 Package preparation is a separate explicit action. If the pinned MCP package is already available in the normal npm cache, skip preparation. Otherwise, when dependency installation/network use is authorized, run:
 

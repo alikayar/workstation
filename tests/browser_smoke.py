@@ -179,6 +179,11 @@ def exercise(client, url, output, extended):
         report['audit'] = audit(client, page, output / 'audit-good')
         report['checks'].append('Native Lighthouse JSON/HTML report and independently expected passing audits')
         if extended:
+            denied = output.parent / 'outside-mcp-root.json'
+            error = expected_tool_error(lambda: client.tool('evaluate_script', pageId=page,
+                                        function='() => true', filePath=str(denied)))
+            require('Access denied' in error and not denied.exists(), 'MCP artifact root boundary was not enforced')
+            report['checks'].append('MCP roots allow task artifacts and reject writes outside the declared root')
             report['expected_error'] = expected_tool_error(lambda: client.tool('click', pageId=page, uid='fixture-invalid-uid'))
             report['missing_page_id_error'] = expected_tool_error(lambda: client.tool('take_snapshot'))
             report['wait_timeout_error'] = expected_tool_error(lambda: client.tool('wait_for', pageId=other, text=['fixture-never-present'], visible=True, timeout=500))
