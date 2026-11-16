@@ -267,7 +267,7 @@ A completed Ubuntu development selection is saved. `wvm configure` retries/reapp
 
 ### Verification status
 
-The manual Actions matrix parses Windows sources and runs 41 isolated host/VM contract cases with Windows PowerShell 5.1 and PowerShell 7. These use temporary files, a synthetic config API peer and substituted Hyper-V inventories; see the [test architecture and execution guide](verification.md#windows-contracts). They have not yet been executed on Windows for this revision.
+The manual Actions matrix parses Windows sources and runs 41 isolated host/VM contract cases with Windows PowerShell 5.1 and PowerShell 7. These use temporary files, a synthetic config API peer and substituted Hyper-V inventories; see the [test architecture and execution guide](verification.md#windows-contracts). The [2026-11-16 hosted run](https://github.com/alikayar/workstation/actions/runs/43846169110) passed 41/41 on each shell with no skips; this is isolated contract evidence, not a live VM/image build.
 
 The image/clone architecture still needs fresh Hyper-V end-to-end validation for **both OSes**, including two clones, distinct guest identities, interrupted build/publication/first-boot recovery, repeated creation and deleting a clone while keeping the base. Parser, HCL validation and mocked checks are not evidence of a live image build. Existing VM disks and state must remain unchanged during that validation.
 

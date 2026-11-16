@@ -37,7 +37,7 @@ The default Ubuntu Codex configuration gives full filesystem access inside the e
 
 ## Compatibility and evidence
 
-Ubuntu 24.04/26.04 LTS are the CI targets; x86_64 and aarch64 pass platform validation, with the managed browser available only on x86_64. Source checks and isolated Linux regressions run on relevant PRs/pushes. Manual CI is configured for full Ubuntu installs/idempotency, optional browser smoke/battle, and Windows PowerShell 5.1/7 contracts. Choose `scope=windows` for the Windows matrix alone. Configured jobs are distinct from completed verification; Windows contracts and current clean-install evidence remain pending. See [actual results and limits](docs/verification.md).
+Ubuntu 24.04/26.04 LTS are the CI targets; x86_64 and aarch64 pass platform validation, with the managed browser available only on x86_64. Source checks and isolated Linux regressions run on relevant PRs/pushes. Manual CI is configured for full Ubuntu installs/idempotency, optional browser smoke/battle, and Windows PowerShell 5.1/7 contracts. Choose `scope=windows` for the Windows matrix alone. Windows contracts passed all 41 cases on both PowerShell versions in the [hosted run](https://github.com/alikayar/workstation/actions/runs/43846169110). Full clean-install and live Hyper-V image/recovery evidence remain separate. See [actual results and limits](docs/verification.md).
 
 ## License
 

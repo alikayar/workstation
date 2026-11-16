@@ -20,9 +20,9 @@ The [browser guide](browser.md) owns operational behavior; this page owns its ve
 
 | Boundary | Current evidence | Remaining work |
 | --- | --- | --- |
-| Linux configuration and helpers | Expanded local installed-tool run: 21 tests, no failures/errors/skips | Hosted checks for the final pushed revision; live security-role application remains separate |
+| Linux configuration and helpers | Prepared VM: 21/21 without skips; hosted source run: 18 passed, 3 declared installed-tool skips | Full installation/idempotency and live security-role application remain separate |
 | Chrome/MCP integration | Local standalone smoke and battle normal/SIGTERM/restart phases passed | Hosted fresh-install/browser run; screenshot review for each new visual claim |
-| Windows host/VM contracts | 41 cases authored; runner and workflow source-reviewed | First actual Windows PowerShell 5.1/7 execution |
+| Windows host/VM contracts | 41/41 passed in each hosted PowerShell 5.1/7 job, no skips | Live Hyper-V image/clone/recovery validation remains separate |
 | Fresh Ubuntu install/idempotency | Manual Ubuntu matrix configured | Current revision's hosted full install and second-apply result |
 | Hyper-V images/clones/recovery | Source review and authored isolated contracts; older bounded network evidence is documented separately | Fresh live image/clone/recovery validation for both guests |
 
@@ -30,7 +30,7 @@ This table records the prepared work and observed local runs, not the status bad
 
 ## Local evidence: 2026-11-16
 
-The final installed-tool/configuration regression run passed 21 cases with zero failures/errors/skips. It includes the reduced MCP/component catalog, security/base tag selection, settings/archive/appearance protections, actual Codex plugin idempotency, rendered Graphify indexing and real user-service lifecycle. Ansible syntax, production-profile lint (27 files, no failures/warnings), actionlint, compilation of 19 Python sources, Renovate JSON parsing and diff whitespace checks passed. Local file/heading review checked 194 links across 21 Markdown files. A separate real doctor invocation returned OK for all 13 requested observations. These runs did not apply full provisioning or establish live SSH/UFW behavior.
+The final installed-tool/configuration regression run under Ubuntu's system Python 3.12.3 passed 21 cases with zero failures/errors/skips. It includes the reduced MCP/component catalog, security/base tag selection, settings/archive/appearance protections, actual Codex plugin idempotency, rendered Graphify indexing and real user-service lifecycle. Ansible syntax, production-profile lint (27 files, no failures/warnings), actionlint, compilation of 19 Python sources, Renovate JSON parsing and diff whitespace checks passed. Local file/heading review checked 194 links across 21 Markdown files. A separate real doctor invocation returned OK for all 13 requested observations. These runs did not apply full provisioning or establish live SSH/UFW behavior.
 
 An earlier standalone browser smoke run and browser battle passed their normal, SIGTERM and fresh-process restart phases. They verified the declared interaction/isolation/audit/error cases, native trace/report artifacts and graceful EOF cleanup. No observed process required forced reaping and no owned PIDs remained after any phase. Desktop and mobile screenshots from the normal phase were visually inspected without clipping or overlap. This browser evidence predates the later component removals, default security enablement and Ubuntu operations changes; it is not clean-install evidence for those changes.
 
@@ -90,9 +90,17 @@ Run on a Windows x64 machine in each shell, with a distinct new artifact directo
 
 On **Actions → CI → Run workflow**, choose `scope=windows` to run only the Windows matrix, without Ubuntu provisioning or browser jobs. The default `scope=all` keeps the full manual workflow.
 
-The manual `windows-powershell` Actions job performs source parsing and runs this suite independently with `powershell` and `pwsh`. Failures are not skipped or retried. `result.json` records shell/OS/compiler versions, production/test source hashes, case outcomes and durations; per-case logs are retained. Only result/log files are uploaded, excluding compiled peers and generated configuration. PowerShell is unavailable in the current Ubuntu VM: these Windows cases have been authored and source-reviewed, **not executed**. The first hosted run must establish their Windows runtime compatibility.
+The manual `windows-powershell` Actions job performs source parsing and runs this suite independently with `powershell` and `pwsh`. Failures are not skipped or retried. `result.json` records shell/OS/compiler versions, production/test source hashes, case outcomes and durations; per-case logs are retained. Only result/log files are uploaded, excluding compiled peers and generated configuration. PowerShell remains unavailable in the Ubuntu VM; actual execution is provided by the hosted matrix described below.
 
 This suite does not build an image, boot a guest, mount a real VHD, install host applications, change a network policy or prove live Hyper-V isolation. Fresh image/clone/recovery coverage remains the separate work listed in the [Windows guide](windows.md#recovery-compatibility-and-validation).
+
+## Hosted Windows evidence: 2026-11-16
+
+[Run 43846169110](https://github.com/alikayar/workstation/actions/runs/43846169110), testing implementation commit `f6af004`, passed **41/41 cases with no failures or skips in each shell**: Windows PowerShell 5.1.26100.33648 (Desktop) and PowerShell 7.6.9 (Core). Both runners reported Windows NT 10.0.26100.0 and the inbox .NET Framework compiler 4.8.9221.0. The uploaded `result.json` files retain exact production/test source hashes, case outcomes, durations and execution boundaries. `scope=windows` skipped Ubuntu installation and browser jobs as intended.
+
+The first [hosted attempt](https://github.com/alikayar/workstation/actions/runs/43845325532) exposed a Terminal assertion counting its own harness log, nested Newtonsoft property enumeration on PowerShell 7 and config API stdin encoding on PowerShell 5.1. A [diagnostic attempt](https://github.com/alikayar/workstation/actions/runs/43845784919) confirmed the latter two after fixture isolation was corrected. The production fixes enumerate JObject properties directly and initialize redirected stdin with BOM-free UTF-8 while restoring the host console encoding. Failed attempts remain separate evidence; no scenario was skipped to obtain the passing result.
+
+The automatic Ubuntu source job also exposed Python 3.12's TOML 1.0 parser rejecting multiline inline tables accepted by the newer local interpreter. The same granular permission values now use a TOML 1.0-compatible inline table. The [automatic source run 43846159821](https://github.com/alikayar/workstation/actions/runs/43846159821) then passed source checks and the standard suite: 18 passed, zero failures/errors and three declared installed-tool skips. A separate prepared-VM run under system Python 3.12.3 passed all 21 with no skips. These source/contract outcomes do not establish Windows desktop installation, live Hyper-V isolation or a fresh Ubuntu provisioning pass.
 
 ## Browser setup and execution
 
