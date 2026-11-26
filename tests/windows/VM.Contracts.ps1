@@ -214,6 +214,34 @@ Add-Case 'Base image manifest checks identity, real file hash and disk shape' {
     Write-Fixture $disk 'tampered image bytes'
     $null = Assert-Throws { Get-WVMBaseImage $spec } 'disk changed'
 }
+Add-Case 'Cloning reads the published base image after a noisy first build and reuses it' {
+    param($directory)
+    $library = Export-TestFunctions 'host/windows/hyperv/shared/New-ImageVM.ps1' ((Split-Path -Leaf $directory) + '\clone-image')
+    . $library
+    $builder = Join-Path (Split-Path -Parent $library) 'Build-BaseImage.ps1'
+    Write-Fixture $builder @'
+param($Guest, $ImageRoot, $IsoPath, [switch]$OpenConsole)
+Write-Output 'Packer: configuration validated.'
+$manifestPath = Join-Path $ImageRoot 'image.json'
+Move-Item -LiteralPath (Join-Path $ImageRoot 'image.pending.json') -Destination $manifestPath
+Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+'@
+
+    $disk = Join-Path $directory 'base.vhdx'
+    Write-Fixture $disk 'synthetic base image bytes'
+    $spec = [pscustomobject]@{Root=$directory;ImageRoot=$directory;ID='fixture-id';Guest='Ubuntu';MediaSha256=('a' * 64);DiskGB=40}
+    $manifest = @{Schema=1;Phase='Ready';ID=$spec.ID;Guest=$spec.Guest;MediaSha256=$spec.MediaSha256;DiskSha256=(Get-FileHash -LiteralPath $disk).Hash;DiskGB=40}
+    Write-Fixture (Join-Path $directory 'image.pending.json') ($manifest | ConvertTo-Json)
+    $script:ImageACL = New-TestImageACL 'S-1-5-32-544' ''
+    function Get-Acl { param($LiteralPath) return $script:ImageACL }
+    function Get-VHD { param($Path) return @{ParentPath='';Size=40GB} }
+
+    $images = @(Get-WVMCloneBaseImage $spec)
+    Assert-Equal $images.Count 1
+    Assert-Equal $images[0].ID $spec.ID
+    Assert-Equal $images[0].DiskPath $disk
+    Assert-Equal (Get-WVMCloneBaseImage $spec).DiskPath $disk
+}
 Add-Case 'Frozen recovery payload rejects changed bytes and path traversal' {
     param($directory)
     $hashes = [ordered]@{}

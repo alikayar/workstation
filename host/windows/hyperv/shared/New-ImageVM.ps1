@@ -40,6 +40,17 @@ if ($ConfigureWorkstation -and $Guest -ne 'Ubuntu') { throw 'Workstation configu
 function Read-CloneValue([string]$Label,[object]$Default,[scriptblock]$Validate){
     while($true){$answer=Read-Host "$Label [$Default]";if([string]::IsNullOrWhiteSpace($answer)){$answer=[string]$Default};try{return & $Validate $answer.Trim()}catch{Write-Host $_.Exception.Message -ForegroundColor Yellow}}
 }
+function Get-WVMCloneBaseImage([object]$Spec, [string]$IsoPath, [switch]$OpenConsole) {
+    $image = Get-WVMBaseImage $Spec
+    if (-not $image) {
+        Write-Host 'Preparing the reusable base image once; subsequent creates only copy it.'
+        & (Join-Path $PSScriptRoot 'Build-BaseImage.ps1') -Guest $Spec.Guest -ImageRoot $Spec.ImageRoot -IsoPath $IsoPath -OpenConsole:$OpenConsole | Out-Host
+        # The build also streams Packer output. Use the verified image from the store.
+        $image = Get-WVMBaseImage $Spec
+    }
+    if (-not $image) { throw 'The expected base image was not published; retry before creating a VM.' }
+    return $image
+}
 $folder=if($Guest -eq 'Windows'){'windows-pro'}else{'ubuntu-26-04'}
 $namePattern=if($Guest -eq 'Windows'){'^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$'}else{'^[a-z][a-z0-9-]{0,61}[a-z0-9]$'}
 if(-not $PSBoundParameters.ContainsKey('VMName')){$VMName=Read-CloneValue 'VM name' ('workstation-'+$folder) {param($value) if($value -cnotmatch $namePattern){throw 'Use a valid guest hostname containing letters, digits or hyphens.'};$value}}
@@ -100,9 +111,7 @@ try{
         if($Guest -eq 'Ubuntu'){$null=Get-UbuntuNetworkTopology $SwitchName}
         if(([uint64](Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory*1KB) -lt (($MemoryGB+2)*1GB)){throw 'Not enough RAM for the requested clone plus 2 GiB for the host; no image build or VM creation started.'}
         $spec=Get-WVMImageSpec $Guest $ImageRoot
-        $image=Get-WVMBaseImage $spec
-        if(-not $image){Write-Host 'Preparing the reusable base image once; subsequent creates only copy it.';$image=& (Join-Path $PSScriptRoot 'Build-BaseImage.ps1') -Guest $Guest -ImageRoot $ImageRoot -IsoPath $IsoPath -OpenConsole:$OpenConsole}
-        if($image.ID -cne $spec.ID){throw 'Image specification changed during creation; retry before creating a VM.'}
+        $image = Get-WVMCloneBaseImage $spec -IsoPath $IsoPath -OpenConsole:$OpenConsole
         if((Get-Volume -DriveLetter ([IO.Path]::GetPathRoot($root).Substring(0,1))).SizeRemaining -lt ((Get-Item -LiteralPath $image.DiskPath).Length+10GB)){throw 'Not enough disk space for a full independent image copy and working space.'}
         New-WVMPrivateDirectory $root
         New-Item -ItemType Directory -Path (Join-Path $root 'machines')|Out-Null
