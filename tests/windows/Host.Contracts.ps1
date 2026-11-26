@@ -57,37 +57,53 @@ Add-Case 'Selection supports names, numbers, deduplication and invalid-input ret
     Set-Answers @('invalid', '1,browser,2')
     Assert-Equal @(Read-WorkstationSelection 'Fixture' @('codex','browser') @('Codex','Chrome')) @('codex','browser')
     Assert-Equal $Answers.Count 0
-    Set-Answers @('hepsi')
-    Assert-Equal @(Read-WorkstationSelection 'Fixture' @('node','python') @('Node','Python')) @('node','python')
-    Set-Answers @('')
+}
+Add-Case 'Selection defaults to all and accepts an explicit none' {
+    param($directory)
+    foreach ($answer in @('', 'all')) {
+        Set-Answers @($answer)
+        Assert-Equal @(Read-WorkstationSelection 'Fixture' @('node','python') @('Node','Python')) @('node','python')
+        Assert-Equal $Answers.Count 0
+    }
+    Set-Answers @('none')
     Assert-Equal @(Read-WorkstationSelection 'Fixture' @('node') @('Node')) @()
+    Assert-Equal $Answers.Count 0
 }
 Add-Case 'Declined provisioning asks no identity questions' {
     param($directory)
-    Set-Answers @('n')
+    Set-Answers @('none')
     $result = Read-WorkstationConfiguration
     Assert-True (-not $result.Enabled)
     Assert-Equal $result.GitName ''
     Assert-Equal $Answers.Count 0
 }
-Add-Case 'All shortcut still requires final consent' {
+Add-Case 'Initial default selects all tools and still requires final consent' {
     param($directory)
-    Set-Answers @('hepsi','n')
+    Set-Answers @('', '')
     $result = Read-WorkstationConfiguration
     Assert-True (-not $result.Enabled)
-    Assert-True ('browser' -in $result.Components)
+    Assert-Equal @($result.Languages | Sort-Object) @('bun','go','node','php','python')
     Assert-Equal @($result.Components | Sort-Object) @('browser','codex','docker','graphify','vscode')
     Assert-Equal $result.GitEmail ''
     Assert-Equal $Answers.Count 0
 }
 Add-Case 'Selected Codex and browser disclose required runtimes before consent' {
     param($directory)
-    Set-Answers @('', 'codex', 'browser', 'y', 'Fixture User', 'fixture@example.invalid')
-    $result = Read-WorkstationConfiguration -Enable
+    Set-Answers @('custom', 'none', 'codex', 'browser', 'y', 'Fixture User', 'fixture@example.invalid')
+    $result = Read-WorkstationConfiguration
     Assert-True $result.Enabled
     Assert-Equal @($result.Languages | Sort-Object) @('node','python')
     Assert-Equal @($result.Components | Sort-Object) @('browser','codex')
     Assert-Equal $result.GitName 'Fixture User'
+    Assert-Equal $Answers.Count 0
+}
+Add-Case 'Explicitly enabled provisioning defaults to all in each domain' {
+    param($directory)
+    Set-Answers @('', '', '', 'y', 'Fixture User', 'fixture@example.invalid')
+    $result = Read-WorkstationConfiguration -Enable
+    Assert-True $result.Enabled
+    Assert-Equal @($result.Languages | Sort-Object) @('bun','go','node','php','python')
+    Assert-Equal @($result.Components | Sort-Object) @('browser','codex','docker','graphify','vscode')
     Assert-Equal $Answers.Count 0
 }
 Add-Case 'Host JSONC parser preserves URLs, dates, arrays and quoted comment tokens' {

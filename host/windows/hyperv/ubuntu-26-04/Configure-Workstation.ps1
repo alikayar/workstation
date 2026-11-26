@@ -3,8 +3,9 @@ function Read-WorkstationSelection([string]$Title, [string[]]$Keys, [string[]]$L
     for($i=0;$i -lt $Keys.Count;$i++){Write-Host ('  {0}. {1} - {2}' -f ($i+1),$Keys[$i],$Labels[$i])}
     if($All){return $Keys}
     while($true){
-        $answer=(Read-Host 'Select numbers/names separated by commas; hepsi = all, blank = none').Trim().ToLowerInvariant()
-        if($answer -eq 'hepsi'){return $Keys}
+        $answer=([string](Read-Host 'Select all, none, or comma-separated numbers/names [all]')).Trim().ToLowerInvariant()
+        if($answer -in @('','all')){return $Keys}
+        if($answer -eq 'none'){return}
         $selected=@();$invalid=@()
         foreach($value in @($answer.Split(',') | ForEach-Object {$_.Trim()} | Where-Object {$_})){
             $index=0
@@ -20,9 +21,11 @@ function Read-WorkstationSelection([string]$Title, [string[]]$Keys, [string[]]$L
 function Read-WorkstationConfiguration([switch]$Enable) {
     $enabled=[bool]$Enable;$all=$false
     if(-not $Enable){
-        do {$answer=(Read-Host 'Install the Workstation development environment too? [Y/n/hepsi]').Trim().ToLowerInvariant()} while($answer -notmatch '^(|y|yes|n|no|hepsi)$')
-        $enabled=$answer -match '^(|y|yes|hepsi)$'
-        $all=$answer -eq 'hepsi'
+        do {
+            $answer=([string](Read-Host 'Install the Workstation development environment? Choose all, custom, or none [all]')).Trim().ToLowerInvariant()
+        } while($answer -notin @('','all','custom','none','y','yes','n','no'))
+        $enabled=$answer -notin @('none','n','no')
+        $all=$answer -in @('','all')
     }
     $name='';$email='';$languages=@();$components=@()
     if($enabled){

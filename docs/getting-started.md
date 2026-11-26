@@ -37,7 +37,7 @@ nano ansible/host_vars/localhost.yml
 
 ## Choose the installation scope
 
-Direct Ansible and the Windows menu share the same role sources but select scope differently. Direct Ansible is noninteractive apart from sudo and defaults to all five languages; setting a runtime list does not disable Docker, Codex or other roles. An untagged apply includes all default-enabled roles below. Tags select components, while each optional component's enable flag still applies. The Windows `wvm` workflow asks for languages, development tools and helper tools, accepts `hepsi` for all choices, and requires final scope confirmation. Neither path automatically removes old software or migrates legacy state.
+Direct Ansible and the Windows menu share the same role sources but select scope differently. Direct Ansible is noninteractive apart from sudo and defaults to all five languages; setting a runtime list does not disable Docker, Codex or other roles. An untagged apply includes all default-enabled roles below. Tags select components, while each optional component's enable flag still applies. The Windows `wvm` menu defaults to `all` for languages, development tools and helper tools and requires final scope confirmation. See [Ubuntu Server clones](hyperv.md#ubuntu-server-2604-clones) for the full menu. Neither path automatically removes old software or migrates legacy state.
 
 For example, merge these non-secret overrides into ignored `ansible/host_vars/localhost.yml`, preserving your Git identity:
 
