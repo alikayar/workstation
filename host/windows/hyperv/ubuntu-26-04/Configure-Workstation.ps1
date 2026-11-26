@@ -43,8 +43,10 @@ function Read-WorkstationConfiguration([switch]$Enable) {
         Write-Host ('Selected languages: '+$(if($languages.Count){$languages -join ', '}else{'none'}))
         Write-Host ('Selected tools: '+$(if($components.Count){$components -join ', '}else{'none'}))
         Write-Host 'The base environment is included. PHP includes Composer/build dependencies. Omitted choices do not uninstall existing software.'
-        do {$answer=(Read-Host 'Apply this scope inside Ubuntu? [y/N]').Trim()} while($answer -notmatch '^(|y|yes|n|no)$')
-        $enabled=$answer -match '^(y|yes)$'
+        do {
+            $answer=([string](Read-Host 'Apply this scope inside Ubuntu? [Y/n]')).Trim()
+        } while($answer -notin @('','y','yes','n','no'))
+        $enabled=$answer -notin @('n','no')
         if($enabled){
             do {$name=(Read-Host 'Git author name').Trim()} while(-not $name -or $name -match '[\r\n]')
             do {$email=(Read-Host 'Git author email').Trim()} while($email -notmatch '^[^\s@]+@[^\s@]+$')

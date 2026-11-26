@@ -77,13 +77,23 @@ Add-Case 'Declined provisioning asks no identity questions' {
     Assert-Equal $result.GitName ''
     Assert-Equal $Answers.Count 0
 }
-Add-Case 'Initial default selects all tools and still requires final consent' {
+Add-Case 'Enter selects all tools and accepts the displayed scope' {
     param($directory)
-    Set-Answers @('', '')
+    Set-Answers @('', '', 'Fixture User', 'fixture@example.invalid')
     $result = Read-WorkstationConfiguration
-    Assert-True (-not $result.Enabled)
+    Assert-True $result.Enabled
     Assert-Equal @($result.Languages | Sort-Object) @('bun','go','node','php','python')
     Assert-Equal @($result.Components | Sort-Object) @('browser','codex','docker','graphify','vscode')
+    Assert-Equal $result.GitName 'Fixture User'
+    Assert-Equal $result.GitEmail 'fixture@example.invalid'
+    Assert-Equal $Answers.Count 0
+}
+Add-Case 'Declining the displayed scope skips provisioning and identity questions' {
+    param($directory)
+    Set-Answers @('', 'n')
+    $result = Read-WorkstationConfiguration
+    Assert-True (-not $result.Enabled)
+    Assert-Equal $result.GitName ''
     Assert-Equal $result.GitEmail ''
     Assert-Equal $Answers.Count 0
 }
